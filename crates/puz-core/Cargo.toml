@@ -1,0 +1,24 @@
+[package]
+name = "puz-core"
+description = "The crossword puzzle file model: read, edit, check, draw, import and export one puzzle file"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["crossword", "puzzle", "puz", "jpz"]
+categories = ["parser-implementations", "games"]
+
+[features]
+default = ["pdf"]
+# PDF export (the one-page PDF and submission PDFs). Without it, PDF export fails with a message.
+pdf = ["dep:svg2pdf", "dep:pdf-writer"]
+
+[dependencies]
+anyhow.workspace = true
+pdf-writer = { version = "0.12.1", optional = true }
+resvg.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+svg2pdf = { workspace = true, optional = true }
+swords-client = { version = "0.5.0", path = "../swords" }

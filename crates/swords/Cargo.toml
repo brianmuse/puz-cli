@@ -1,0 +1,17 @@
+[package]
+name = "swords-client"
+description = "Publish crosswords to a Swords solving site and manage the ones you published: the library the puz command uses."
+version = "0.5.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["crossword", "puzzle", "swords"]
+categories = ["api-bindings", "games"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "3", default-features = false, features = ["rustls"] }

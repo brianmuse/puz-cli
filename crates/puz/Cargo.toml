@@ -1,0 +1,28 @@
+[package]
+name = "puz-cli"
+description = "puz: make and edit a crossword puzzle file from the command line"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["crossword", "puzzle", "cli", "puz", "jpz"]
+categories = ["command-line-utilities", "games"]
+
+[[bin]]
+name = "puz"
+path = "src/main.rs"
+
+[features]
+default = ["pdf"]
+# PDF export. Build with --no-default-features for a smaller puz without it.
+pdf = ["puz-core/pdf"]
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+puz-core = { version = "0.5.2", path = "../puz-core", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+swords-client = { version = "0.5.0", path = "../swords" }

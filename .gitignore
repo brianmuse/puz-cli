@@ -1,0 +1,6 @@
+/target
+.DS_Store
+# Local secrets
+.env
+.env.*
+.dev.vars
