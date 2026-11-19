@@ -27,6 +27,10 @@
 
 ---
 
+```sh
+curl -fsSL https://swords.cx/install.sh | sh
+```
+
 ```console
 $ puz show hello-world.json
 Hello, World (5x5)
