@@ -20,7 +20,7 @@ This puts `puz` in `~/.local/bin` and runs `puz setup`. `puz update` gets the ne
 You need Rust 1.89 or newer.
 
 ```sh
-git clone https://github.com/brianmuse/puz
+git clone https://github.com/brianmuse/puz-cli
 cd puz
 cargo build --release
 ./target/release/puz --help
