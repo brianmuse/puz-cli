@@ -42,7 +42,7 @@ H E L L O
 ```
 
 - **One puzzle, one file.** A puzzle is a plain JSON file. Every command reads or changes one file. No account, no server.
-- **Every common format.** Import and export Across Lite `.puz` and `.jpz`. Export a PNG, a printable PDF, or a newspaper submission PDF.
+- **Every common format.** Import Across Lite `.puz`. Export `.puz`, `.jpz`, a PNG, a printable PDF, or a newspaper submission PDF.
 - **Publish in one command.** `puz publish` puts a finished puzzle on [swords.cx](https://swords.cx) and prints a link to solve it in the browser, on any device.
 - **Built for scripts and AI agents.** Commands that report results take `--json`.
 
@@ -79,7 +79,7 @@ puz clue my-puzzle.json 1a "Swiss peaks"
 puz show my-puzzle.json                 # the grid and every clue
 puz stats my-puzzle.json                # grid stats and a paper's rules
 puz export my-puzzle.json --format pdf  # also puz, jpz, png, json
-puz import puzzle.puz                   # .puz or .jpz to a puzzle file
+puz import puzzle.puz                   # a .puz to a puzzle file
 puz publish my-puzzle.json              # put it on swords.cx and print the link
 puz publish nyt my-puzzle.json          # a NYT submission PDF
 puz swords list                         # what you published, with solve stats
