@@ -18,8 +18,8 @@ use std::path::Path;
 pub const KINDS: [&str; 7] = ["paint", "write", "line", "image", "text", "clear", "effect"];
 /// Most steps in one scene.
 pub const MAX_STEPS: usize = 40;
-/// Most image data in one scene, in bytes after decoding (1.5 MB), all pictures together.
-pub const MAX_IMAGE_BYTES: usize = 1_500_000;
+/// Most image data in one scene, in bytes after decoding (750 KB), all pictures together.
+pub const MAX_IMAGE_BYTES: usize = 750_000;
 /// Most squares or points in one step.
 pub const MAX_POINTS: usize = 2000;
 /// Most characters in a caption.
@@ -631,11 +631,11 @@ mod tests {
         assert!(err(json!([{ "kind": "line", "through": many(MAX_POINTS + 1) }])).contains("the limit is 2000"));
         // A stagger counts toward the 60 seconds.
         assert!(err(json!([{ "kind": "paint", "squares": many(200), "color": "red", "stagger": 0.5 }])).contains("within 60 seconds"));
-        // Pictures: 1.5 MB decoded, all together.
+        // Pictures: 750 KB decoded, all together.
         let img = |bytes: usize| json!({ "kind": "image", "src": format!("data:image/png;base64,{}", "A".repeat(bytes / 3 * 4)), "for": 0 });
         assert!(scene(json!([img(MAX_IMAGE_BYTES)])).is_ok());
         assert!(scene(json!([img(MAX_IMAGE_BYTES / 2), img(MAX_IMAGE_BYTES / 2)])).is_ok());
-        assert!(err(json!([img(MAX_IMAGE_BYTES / 2), img(MAX_IMAGE_BYTES / 2), img(3000)])).contains("the limit is 1500 KB"));
+        assert!(err(json!([img(MAX_IMAGE_BYTES / 2), img(MAX_IMAGE_BYTES / 2), img(3000)])).contains("the limit is 750 KB"));
     }
 
     #[test]

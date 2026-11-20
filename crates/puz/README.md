@@ -217,7 +217,7 @@ puz ending PUZZLE --scene-clear                                 # remove the sce
 - `--caption` goes below the grid. With `--over grid` or `--over "x,y,w,h"` it goes over the grid (`--size` in squares, `--color`).
 - The solver sees the scene first, then the message. A tap on the grid skips to the end. "Replay" plays it again.
 - Solvers who ask for less motion see the last state at once.
-- Limits: 40 steps; every step ends within 60 seconds; 2,000 squares or points in a step; 200 characters in a caption; 1.5 MB of pictures in one scene (1,500,000 bytes of image data, all pictures together).
+- Limits: 40 steps; every step ends within 60 seconds; 2,000 squares or points in a step; 200 characters in a caption; 750 KB of pictures in one scene (750,000 bytes of image data, all pictures together).
 
 In the puzzle file a scene is `ending.scene`, a list of steps. Each step has a `kind`, may have `at` and `for`, and has the fields of its kind:
 

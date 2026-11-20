@@ -39,7 +39,7 @@ Other commands: `--scene FILE.json` replaces the whole scene from a JSON list of
 
 ## A picture can be anything
 
-For a reveal that paint, write and line cannot make, draw it as a picture. Write an SVG file sized to the squares it covers (for a 15x15 grid, a `viewBox` of `0 0 15 15` makes one unit one square), then add it with `--image FILE --over grid`. An SVG may animate itself with CSS or SMIL. It cannot run scripts or load other files. All the pictures of one scene together may hold 1.5 MB.
+For a reveal that paint, write and line cannot make, draw it as a picture. Write an SVG file sized to the squares it covers (for a 15x15 grid, a `viewBox` of `0 0 15 15` makes one unit one square), then add it with `--image FILE --over grid`. An SVG may animate itself with CSS or SMIL. It cannot run scripts or load other files. All the pictures of one scene together may hold 750 KB.
 
 ## Limits
 
