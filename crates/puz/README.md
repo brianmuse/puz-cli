@@ -101,7 +101,7 @@ Slots can be `41a`, `17d`, or `5,7,across`. A square is `x,y`: column, then row,
 | `puz wall PUZZLE x,y right\|bottom\|left\|top [--remove] [--json]` | Add or remove a wall (bar) on one side of a square. A wall ends answers. |
 | `puz sprite PUZZLE x,y --emoji "⭐" \| --image FILE [--alt TEXT] \| --remove [--json]` | Put a picture on a square, white or black. Images: png, jpg, gif, svg or webp, up to 300 KB. |
 | `puz lock PUZZLE 9A\|x,y [x2,y2] [--remove] [--json]`, `puz lock PUZZLE --all-filled\|--clear-all` | Lock squares so they keep their letters. Edits that would change a locked square fail; `puz clear` skips them. Locking an answer skips its empty squares. |
-| `puz ending PUZZLE ...` | Set what a solver sees on finishing the puzzle. See [Endings](#endings). |
+| `puz ending PUZZLE ...` | Set the celebration a solver sees on finishing the puzzle. See [Endings](#endings). |
 
 To move a region: `puz copy my-puzzle.json 0,0 4,2 | puz paste my-puzzle.json 10,12 -`.
 
@@ -171,19 +171,20 @@ Edits drop marks that no longer make sense: a rebus on a black or empty square o
 
 ## Endings
 
-A puzzle can have its own ending: what a solver sees on the solving page when the grid is right.
+A puzzle can have its own ending: the celebration a solver sees on the solving page when the grid is right. After it, the solving page shows its own "Solved!" popup.
 
 ```
-puz ending PUZZLE --message "Cheers!" --note "That one was on the house." \
-  --effects "confetti rain" --emoji "🍺 🍻" --highlight "0,0 1,1 2,2" --link "Next puzzle" https://example.com
+puz ending PUZZLE --note "That one was on the house." --effects "confetti rain" --emoji "🍺 🍻" --highlight "0,0 1,1 2,2"
 puz ending PUZZLE            # show it
-puz ending PUZZLE --clear    # back to the plain "Solved!"
+puz ending PUZZLE --clear    # remove the ending
 ```
 
 - Effects: `confetti` (colored paper falls), `rain` (the emoji fall), `burst` (the emoji fly out of the grid), `wave` (the squares flash in a wave). They play together.
 - `--highlight` lights up squares (`x,y`, from `0,0` at the top left): a hidden word or a shape.
 - The ending is the `ending` field of the puzzle file. It is data, never code: a solving page plays the effects it knows and skips the rest. `.jpz` and `.puz` exports leave it out.
-- Solvers who ask their device for less motion get the message without the effects.
+- Solvers who ask their device for less motion get the popup without the effects.
+- `--note` is one short line under the solve time in the popup, up to 140 characters.
+- `message` and `link` from older files are kept in the file. Solving pages do not show the link, and show `message` only when there is no note.
 - `puz guide ending` prints a longer how-to.
 
 ### Scenes

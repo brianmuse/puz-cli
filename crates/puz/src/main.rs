@@ -287,15 +287,15 @@ enum Cmd {
         #[arg(short, long)]
         out: Option<PathBuf>,
     },
-    /// Set what a solver sees on finishing the puzzle: a message, effects, squares that light up, a link,
+    /// Set the celebration a solver sees on finishing the puzzle: effects, squares that light up,
     /// and a scene: steps that play over the grid (squares recolor, letters change, lines, pictures, captions).
     /// Each of --paint, --write, --line, --image, --caption, --play and --erase adds one step; use one per command
     Ending {
         puzzle: String,
-        /// The headline, in place of "Solved!"
-        #[arg(long)]
+        /// Kept in the file but no longer shown
+        #[arg(long, hide = true)]
         message: Option<String>,
-        /// A line under the headline: a punchline, a thank-you, what the theme was
+        /// A short message under the solve time, up to 140 characters
         #[arg(long)]
         note: Option<String>,
         /// Effects to play, separated by spaces or commas: confetti, rain, burst, wave. "" for none
@@ -307,10 +307,10 @@ enum Cmd {
         /// Squares that light up, as "x,y x,y" (0-based). "" for none
         #[arg(long)]
         highlight: Option<String>,
-        /// A button under the message: its label, then its http(s) address. "" "" for none
-        #[arg(long, num_args = 2, value_names = ["LABEL", "URL"])]
+        /// Kept in the file but no longer shown
+        #[arg(long, hide = true, num_args = 2, value_names = ["LABEL", "URL"])]
         link: Option<Vec<String>>,
-        /// Go back to the plain "Solved!" message (this removes the scene too)
+        /// Remove the whole ending (this removes the scene too)
         #[arg(long)]
         clear: bool,
         /// Replace the scene with the steps in a JSON file ("-" reads stdin): a list of steps, or an ending with a "scene"
@@ -1021,6 +1021,9 @@ fn run(cli: Cli) -> Result<i32> {
             let (mut p, path) = ctx.load(&puzzle)?;
             let words = |s: &str| s.split([' ', ',']).map(str::trim).filter(|w| !w.is_empty()).map(str::to_string).collect::<Vec<_>>();
             let before = p.ending.clone();
+            if message.is_some() || link.is_some() {
+                eprintln!("note: solving pages no longer show an ending's message or link. They are saved in the file. Use --note for a short line.");
+            }
             if clear {
                 p.ending = Default::default();
             }
@@ -1028,6 +1031,9 @@ fn run(cli: Cli) -> Result<i32> {
                 p.ending.message = m.trim().to_string();
             }
             if let Some(n) = note {
+                if n.trim().chars().count() > 140 {
+                    bail!("the note is {} characters; keep it to 140", n.trim().chars().count());
+                }
                 p.ending.note = n.trim().to_string();
             }
             if let Some(e) = effects {

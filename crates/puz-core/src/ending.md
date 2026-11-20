@@ -1,15 +1,15 @@
 # Endings and scenes
 
-An ending is what a solver sees on the solving page when the grid is right. It is part of the puzzle file (`ending`). It is data, never code: there are no scripts, no HTML and no web addresses in it, except the one `link` button.
+An ending is the celebration a solver sees on the solving page when the grid is right. It is part of the puzzle file (`ending`). It is data, never code: there are no scripts, no HTML and no web addresses in it. After the celebration, the solving page shows its own "Solved!" popup; the puzzle does not change it.
 
 Read it first: `puz ending PUZZLE --json --no-images` (`--no-images` keeps picture data out of your context).
 
 ## The simple parts
 
-- `--message TEXT`: the headline, in place of "Solved!". `--note TEXT`: one line under it.
 - `--effects "confetti rain"`: canned effects (confetti, rain, burst, wave). `--emoji "A B"`: the emoji that rain and burst use.
 - `--highlight "x,y x,y"`: squares that light up.
-- `--link LABEL URL`: one button.
+- `--note TEXT`: one short line under the solve time in the popup, up to 140 characters (a punchline, a thank-you).
+- Older files can hold `message` and `link`. They are kept in the file. Solving pages do not show the link, and show `message` only as the line when there is no note.
 
 ## The scene
 
@@ -47,7 +47,7 @@ At most 40 steps. Every step ends within 60 seconds of the solve. At most 2,000 
 
 ## Good practice
 
-- Keep it short: most scenes are 2 to 6 steps and under 10 seconds. The solver waits for it before the message appears (a tap skips it).
+- Keep it short: most scenes are 2 to 6 steps and under 10 seconds. The solver waits for it before the popup appears (a tap skips it).
 - The scene must make sense as a still picture: solvers who ask for less motion, and solvers who come back later, see only the last state.
 - Do not hide the answers the solver just filled in unless that is the point.
 - Check the squares against `puz show PUZZLE` before you add a step, and read the result back with `puz ending PUZZLE`.
