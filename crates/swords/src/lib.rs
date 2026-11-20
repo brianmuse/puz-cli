@@ -50,9 +50,10 @@ pub fn warn(text: &str) {
     let _ = writeln!(std::io::stderr(), "{text}");
 }
 
-/// The state file that holds the keys: `$SWORDS_HOME/puzzles.json`, else `~/.config/swords/puzzles.json`.
+/// The state file that holds the keys: `$SWORDS_HOME/puzzles.json`, else `~/.config/swords/puzzles.json`
+/// (`%APPDATA%\swords\puzzles.json` on Windows).
 pub fn state_file() -> Result<PathBuf> {
-    state::state_file(std::env::var_os("SWORDS_HOME"), std::env::var_os("HOME")).ok_or_else(|| anyhow::anyhow!("Can't find your home folder. Set SWORDS_HOME to the folder to keep your keys in."))
+    state::state_file(std::env::var_os("SWORDS_HOME"), state::config_root()).ok_or_else(|| anyhow::anyhow!("Can't find your home folder. Set SWORDS_HOME to the folder to keep your keys in."))
 }
 
 /// The site in use: `flag` (`--site`), then `$SWORDS_SITE`, then the one saved in the state file, then

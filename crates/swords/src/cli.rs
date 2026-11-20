@@ -7,7 +7,8 @@ use clap::Subcommand;
 pub const AFTER_HELP: &str = "\
 PUZZLE is the puzzle file you published, the puzzle's id, or its link.
 The site is, in order: --site, $SWORDS_SITE, the one set with `puz swords site URL`, the one puz was built for.
-Your keys are kept in ~/.config/swords/puzzles.json ($SWORDS_HOME moves the folder).
+Your keys are kept in ~/.config/swords/puzzles.json, or %APPDATA%\\swords\\puzzles.json on Windows
+($SWORDS_HOME moves the folder).
 Publish a puzzle with: puz publish FILE. Your name and sign-in: puz setup";
 
 /// The commands for your puzzles on a Swords site and your account there: the `puz swords` group.

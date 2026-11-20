@@ -15,7 +15,8 @@
 //! - `guides`: how-to texts about the file format.
 //! - `swords`: publishing to a Swords solving site, and the links kept in the puzzle file.
 //!
-//! Nothing here needs a word list, a database or AI. Only `swords` uses the network.
+//! Nothing here needs a word list, a database or AI. Only `swords` uses the network. It is behind
+//! the `swords` feature (on by default).
 
 pub mod blocks;
 pub mod edit;
@@ -30,4 +31,5 @@ pub mod puzzle;
 pub mod scene;
 pub mod stats;
 pub mod submission;
+#[cfg(feature = "swords")]
 pub mod swords;

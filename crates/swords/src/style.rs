@@ -99,15 +99,15 @@ impl Pen {
 
     /// The pen for results (stdout).
     pub fn stdout() -> Pen {
-        Pen::for_terminal(std::io::stdout().is_terminal())
+        Pen::for_terminal(std::io::stdout().is_terminal(), console::STDOUT)
     }
     /// The pen for notes and errors (stderr).
     pub fn stderr() -> Pen {
-        Pen::for_terminal(std::io::stderr().is_terminal())
+        Pen::for_terminal(std::io::stderr().is_terminal(), console::STDERR)
     }
-    fn for_terminal(rich: bool) -> Pen {
+    fn for_terminal(rich: bool, stream: u32) -> Pen {
         let no_color = std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) || std::env::var("TERM").is_ok_and(|t| t == "dumb");
-        Pen { rich, color: rich && !no_color }
+        Pen { rich, color: rich && !no_color && console::colors(stream) }
     }
 
     fn paint(&self, style: &str, text: &str) -> String {
@@ -210,6 +210,71 @@ impl Pen {
         };
         let head = line(heads.iter().map(|(head, _)| Cell::new(*head, Look::Dim)).collect());
         std::iter::once(head).chain(rows.iter().map(|r| line(r.clone()))).collect::<Vec<_>>().join("\n")
+    }
+}
+
+/// The terminal on Windows. A Windows console shows colors only after the program turns them on,
+/// and it hides typed letters through its own settings, not `stty`. On macOS and Linux these do nothing.
+pub mod console {
+    pub const STDIN: u32 = -10i32 as u32;
+    pub const STDOUT: u32 = -11i32 as u32;
+    pub const STDERR: u32 = -12i32 as u32;
+
+    /// Can this stream show colors? On Windows this turns them on first; an old console that can't
+    /// gets plain text.
+    pub fn colors(stream: u32) -> bool {
+        imp::change(stream, imp::VIRTUAL_TERMINAL, 0).unwrap_or(true)
+    }
+
+    /// Turn the echo of typed letters on or off. False when it can't be changed here.
+    pub fn echo(on: bool) -> bool {
+        #[cfg(windows)]
+        {
+            let (set, clear) = if on { (imp::ECHO, 0) } else { (0, imp::ECHO) };
+            imp::change(STDIN, set, clear) == Some(true)
+        }
+        #[cfg(not(windows))]
+        {
+            let flag = if on { "echo" } else { "-echo" };
+            let quiet = std::process::Stdio::null;
+            std::process::Command::new("stty").arg(flag).stdout(quiet()).stderr(quiet()).status().is_ok_and(|s| s.success())
+        }
+    }
+
+    #[cfg(windows)]
+    mod imp {
+        type Handle = *mut core::ffi::c_void;
+        pub const VIRTUAL_TERMINAL: u32 = 0x0004; // ENABLE_VIRTUAL_TERMINAL_PROCESSING, for output
+        pub const ECHO: u32 = 0x0004; // ENABLE_ECHO_INPUT, for input
+
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetStdHandle(which: u32) -> Handle;
+            fn GetConsoleMode(console: Handle, mode: *mut u32) -> i32;
+            fn SetConsoleMode(console: Handle, mode: u32) -> i32;
+        }
+
+        /// Set and clear bits of a console's mode. Some(false) when it is a console that refused the
+        /// change; None when the stream is not a console.
+        pub fn change(stream: u32, set: u32, clear: u32) -> Option<bool> {
+            // SAFETY: plain Win32 calls on this process's own standard handles, with a valid out pointer.
+            unsafe {
+                let console = GetStdHandle(stream);
+                let mut mode = 0;
+                if console.is_null() || console as isize == -1 || GetConsoleMode(console, &mut mode) == 0 {
+                    return None;
+                }
+                Some(SetConsoleMode(console, (mode | set) & !clear) != 0)
+            }
+        }
+    }
+
+    #[cfg(not(windows))]
+    mod imp {
+        pub const VIRTUAL_TERMINAL: u32 = 0;
+        pub fn change(_stream: u32, _set: u32, _clear: u32) -> Option<bool> {
+            None
+        }
     }
 }
 

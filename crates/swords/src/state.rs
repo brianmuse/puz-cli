@@ -107,11 +107,19 @@ fn write_private(file: &Path, bytes: &[u8]) -> std::io::Result<()> {
     fs::write(file, bytes)
 }
 
-/// The state file's place: `$SWORDS_HOME/puzzles.json`, or `~/.config/swords/puzzles.json`.
-pub fn state_file(swords_home: Option<OsString>, home: Option<OsString>) -> Option<PathBuf> {
+/// The folder that holds settings folders on this computer: `~/.config` on macOS and Linux,
+/// `%APPDATA%` on Windows. None when the variable for it is not set.
+pub fn config_root() -> Option<PathBuf> {
+    let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    if cfg!(windows) { var("APPDATA") } else { var("HOME").map(|home| home.join(".config")) }
+}
+
+/// The state file's place: `$SWORDS_HOME/puzzles.json`, else `swords/puzzles.json` in the settings
+/// folder (`config_root`): `~/.config/swords/puzzles.json`, or `%APPDATA%\swords\puzzles.json` on Windows.
+pub fn state_file(swords_home: Option<OsString>, config_root: Option<PathBuf>) -> Option<PathBuf> {
     let dir = match swords_home.filter(|s| !s.is_empty()) {
         Some(dir) => PathBuf::from(dir),
-        None => PathBuf::from(home.filter(|s| !s.is_empty())?).join(".config").join("swords"),
+        None => config_root?.join("swords"),
     };
     Some(dir.join("puzzles.json"))
 }
@@ -247,9 +255,10 @@ mod tests {
     #[test]
     fn state_file_place() {
         let os = |s: &str| Some(OsString::from(s));
-        assert_eq!(state_file(os("/x/y"), os("/home/me")), Some(PathBuf::from("/x/y/puzzles.json")));
-        assert_eq!(state_file(None, os("/home/me")), Some(PathBuf::from("/home/me/.config/swords/puzzles.json")));
-        assert_eq!(state_file(os(""), os("/home/me")), Some(PathBuf::from("/home/me/.config/swords/puzzles.json")));
+        let root = || Some(PathBuf::from("/home/me/.config"));
+        assert_eq!(state_file(os("/x/y"), root()), Some(PathBuf::from("/x/y/puzzles.json")));
+        assert_eq!(state_file(None, root()), Some(PathBuf::from("/home/me/.config/swords/puzzles.json")));
+        assert_eq!(state_file(os(""), root()), Some(PathBuf::from("/home/me/.config/swords/puzzles.json")));
         assert_eq!(state_file(None, None), None);
     }
 

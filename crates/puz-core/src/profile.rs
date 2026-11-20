@@ -113,13 +113,14 @@ pub fn authors(author: &str) -> Vec<String> {
 }
 
 /// The file that holds your own profile: `$PUZ_PROFILE` if set; else `profile.json` in
-/// `$PUZ_CONFIG_DIR`, `$XDG_CONFIG_HOME/puz` or `~/.config/puz`.
+/// `$PUZ_CONFIG_DIR`, `$XDG_CONFIG_HOME/puz` or `~/.config/puz` (`%APPDATA%\puz` on Windows).
 pub fn user_file() -> PathBuf {
     let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
     if let Some(f) = var("PUZ_PROFILE") {
         return f;
     }
-    let dir = var("PUZ_CONFIG_DIR").or_else(|| var("XDG_CONFIG_HOME").map(|d| d.join("puz"))).unwrap_or_else(|| var("HOME").unwrap_or_default().join(".config/puz"));
+    let root = || if cfg!(windows) { var("APPDATA").unwrap_or_default() } else { var("HOME").unwrap_or_default().join(".config") };
+    let dir = var("PUZ_CONFIG_DIR").or_else(|| var("XDG_CONFIG_HOME").map(|d| d.join("puz"))).unwrap_or_else(|| root().join("puz"));
     dir.join("profile.json")
 }
 

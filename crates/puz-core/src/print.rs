@@ -6,7 +6,7 @@ use crate::puzzle::{square_key, Dir, Puzzle, BOTTOM, RIGHT};
 use anyhow::{anyhow, bail, Result};
 use resvg::usvg;
 use std::fmt::Write;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex};
 
 const FONT: &str = "Helvetica, Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif";
 const EMOJI_FONT: &str = "'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Emoji', 'Twemoji Mozilla', sans-serif";
@@ -467,14 +467,31 @@ pub fn warm_up() {
     let _ = fonts();
 }
 
+/// The fonts in use: the system fonts, plus any added with `add_font`.
+static FONTS: Mutex<Option<Arc<usvg::fontdb::Database>>> = Mutex::new(None);
+
 fn fonts() -> Arc<usvg::fontdb::Database> {
-    static DB: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
-    DB.get_or_init(|| {
-        let mut db = usvg::fontdb::Database::new();
-        db.load_system_fonts();
-        Arc::new(db)
+    let mut db = FONTS.lock().unwrap_or_else(|e| e.into_inner());
+    db.get_or_insert_with(|| {
+        let mut d = usvg::fontdb::Database::new();
+        d.load_system_fonts();
+        Arc::new(d)
     })
     .clone()
+}
+
+/// Add a font file (TrueType, OpenType or a collection) to the fonts drawings use. This is for
+/// places with no system fonts, such as WebAssembly. A drawing finds it by its family name, so add
+/// one of the families the drawings ask for (for example Liberation Sans and Liberation Serif).
+/// Returns how many font faces the data held.
+pub fn add_font(data: Vec<u8>) -> usize {
+    let current = fonts();
+    let mut d = (*current).clone();
+    let before = d.len();
+    d.load_font_data(data);
+    let added = d.len() - before;
+    *FONTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(d));
+    added
 }
 
 /// Parse an SVG with the system fonts loaded, ready to draw.

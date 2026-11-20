@@ -559,10 +559,9 @@ fn read_pin() -> Result<String> {
     Ok(line)
 }
 
-/// Turn the terminal's echo of typed letters on or off. False when this computer has no `stty` to do it.
+/// Turn the terminal's echo of typed letters on or off. False when this computer can't do it.
 fn echo(on: bool) -> bool {
-    let flag = if on { "echo" } else { "-echo" };
-    cfg!(unix) && std::process::Command::new("stty").arg(flag).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+    crate::style::console::echo(on)
 }
 
 fn pin_command(ctx: &Ctx, state: &State, name: &str, pin: Option<&str>, remove: bool) -> Result<()> {
@@ -592,9 +591,15 @@ fn pin_command(ctx: &Ctx, state: &State, name: &str, pin: Option<&str>, remove: 
 fn open(ctx: &Ctx, state: &State, name: &str) -> Result<()> {
     let p = &state.puzzles[find(state, ctx, name)?];
     let url = format!("{}/p/{}/", p.site, p.id);
-    // $BROWSER names another program to open links with.
-    let program = std::env::var_os("BROWSER").filter(|b| !b.is_empty()).unwrap_or_else(|| if cfg!(target_os = "macos") { "open" } else { "xdg-open" }.into());
-    let started = std::process::Command::new(&program).arg(&url).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+    // $BROWSER names another program to open links with. Windows opens a link through the shell's
+    // file handler, which needs no quoting (`cmd /c start` would break a link at its `&`).
+    let (program, first): (std::ffi::OsString, Option<&str>) = match std::env::var_os("BROWSER").filter(|b| !b.is_empty()) {
+        Some(b) => (b, None),
+        None if cfg!(windows) => ("rundll32".into(), Some("url.dll,FileProtocolHandler")),
+        None if cfg!(target_os = "macos") => ("open".into(), None),
+        None => ("xdg-open".into(), None),
+    };
+    let started = std::process::Command::new(&program).args(first).arg(&url).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
     if started.is_err() {
         bail!("Can't start a browser here ({} did not run). Open the link yourself:\n  {url}", program.to_string_lossy());
     }

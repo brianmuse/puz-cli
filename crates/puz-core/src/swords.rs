@@ -48,7 +48,7 @@ pub struct Env {
 impl Env {
     /// From this process: `$SWORDS_HOME` (else `~/.config/swords`), `$SWORDS_SITE`, and the agent marks.
     pub fn from_process() -> Result<Env> {
-        let state_file = state::state_file(std::env::var_os("SWORDS_HOME"), std::env::var_os("HOME"))
+        let state_file = state::state_file(std::env::var_os("SWORDS_HOME"), state::config_root())
             .context("can't find your home folder. Set SWORDS_HOME to the folder to keep your Swords keys in")?;
         Ok(Env { state_file, site: std::env::var("SWORDS_SITE").ok().filter(|s| !s.is_empty()), agent: in_agent_run() })
     }

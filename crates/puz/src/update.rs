@@ -1,7 +1,8 @@
 //! `puz update` (get the newest build of puz from the Swords site and put it in place) and the quiet
 //! daily check that says when a newer puz is out.
 //!
-//! The site serves the builds at `/cli/puz-<os>-<arch>` and the newest version number at `/cli/version`.
+//! The site serves the builds at `/cli/puz-<os>-<arch>` (`puz-windows-x64.exe` for Windows) and the
+//! newest version number at `/cli/version`.
 
 use anyhow::{Context as _, Result, bail};
 use std::ffi::{OsStr, OsString};
@@ -21,24 +22,21 @@ pub fn site() -> String {
     std::env::var("PUZ_UPDATE_SITE").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| swords_client::DEFAULT_SITE.to_string()).trim_end_matches('/').to_string()
 }
 
-/// The name of the build for a computer, like `puz-macos-arm64`. None when there is no build.
+/// The name of the build for a computer, like `puz-macos-arm64` or `puz-windows-x64.exe`. None when
+/// there is no build.
 pub fn build_name(os: &str, arch: &str) -> Option<String> {
-    let os = match os {
-        "macos" => "macos",
-        "linux" => "linux",
+    let name = match (os, arch) {
+        ("macos" | "linux", "aarch64") => format!("puz-{os}-arm64"),
+        ("macos" | "linux", "x86_64") => format!("puz-{os}-x64"),
+        ("windows", "x86_64") => "puz-windows-x64.exe".to_string(),
         _ => return None,
     };
-    let arch = match arch {
-        "aarch64" => "arm64",
-        "x86_64" => "x64",
-        _ => return None,
-    };
-    Some(format!("puz-{os}-{arch}"))
+    Some(name)
 }
 
-/// True when the bytes start like a program for macOS or Linux, not like a web page.
+/// True when the bytes start like a program for macOS, Linux or Windows, not like a web page.
 pub fn is_program(bytes: &[u8]) -> bool {
-    const STARTS: [[u8; 4]; 4] = [[0x7f, b'E', b'L', b'F'], [0xcf, 0xfa, 0xed, 0xfe], [0xca, 0xfe, 0xba, 0xbe], [0xca, 0xfe, 0xba, 0xbf]];
+    const STARTS: [&[u8]; 5] = [b"\x7fELF", &[0xcf, 0xfa, 0xed, 0xfe], &[0xca, 0xfe, 0xba, 0xbe], &[0xca, 0xfe, 0xba, 0xbf], b"MZ"];
     bytes.len() > 1000 && STARTS.iter().any(|s| bytes.starts_with(s))
 }
 
@@ -66,12 +64,18 @@ pub fn refusal(file: &Path) -> Option<String> {
     None
 }
 
+/// The file name with `tail` added: `puz` and `.new` give `puz.new`.
+fn with_tail(file: &Path, tail: &str) -> PathBuf {
+    let mut name = file.as_os_str().to_owned();
+    name.push(tail);
+    PathBuf::from(name)
+}
+
 /// Put new bytes in place of a file: write them beside it, make that runnable, let `check` try it,
 /// then rename it over the old file. When the check fails, the old file stays and the new one is removed.
 pub fn replace(file: &Path, bytes: &[u8], check: &dyn Fn(&Path) -> Result<()>) -> Result<()> {
-    let mut beside = file.as_os_str().to_owned();
-    beside.push(".new");
-    let beside = PathBuf::from(beside);
+    // On Windows the new file keeps `.exe` at the end, so it runs for the check.
+    let beside = if cfg!(windows) { file.with_extension("new.exe") } else { with_tail(file, ".new") };
     let folder = file.parent().unwrap_or(Path::new("."));
     let cant = |_| anyhow::anyhow!("Can't update: the folder {} can't be written. Check who owns it, or install again.", folder.display());
     fs::write(&beside, bytes).map_err(cant)?;
@@ -84,7 +88,19 @@ pub fn replace(file: &Path, bytes: &[u8], check: &dyn Fn(&Path) -> Result<()>) -
         let _ = fs::remove_file(&beside);
         return Err(e);
     }
-    fs::rename(&beside, file).inspect_err(|_| drop(fs::remove_file(&beside))).map_err(cant)
+    swap(&beside, file).inspect_err(|_| drop(fs::remove_file(&beside))).map_err(cant)
+}
+
+/// Rename `new` over `file`. Windows can't replace a program while it runs, but it can rename it: the
+/// running one moves to `puz.exe.old` first, and the next update removes that.
+fn swap(new: &Path, file: &Path) -> std::io::Result<()> {
+    if cfg!(windows) {
+        let old = with_tail(file, ".old");
+        let _ = fs::remove_file(&old);
+        fs::rename(file, &old)?;
+        return fs::rename(new, file).inspect_err(|_| drop(fs::rename(&old, file)));
+    }
+    fs::rename(new, file)
 }
 
 /// Does the new build run here, and is it the version the site named? Run it with `--version`.
@@ -299,7 +315,9 @@ mod tests {
         assert_eq!(build_name("macos", "x86_64").as_deref(), Some("puz-macos-x64"));
         assert_eq!(build_name("linux", "aarch64").as_deref(), Some("puz-linux-arm64"));
         assert_eq!(build_name("linux", "x86_64").as_deref(), Some("puz-linux-x64"));
-        assert_eq!(build_name("windows", "x86_64"), None);
+        assert_eq!(build_name("windows", "x86_64").as_deref(), Some("puz-windows-x64.exe"));
+        assert_eq!(build_name("windows", "aarch64"), None);
+        assert_eq!(build_name("freebsd", "x86_64"), None);
         assert!(build_name(std::env::consts::OS, std::env::consts::ARCH).is_some());
     }
 
@@ -309,7 +327,9 @@ mod tests {
         elf.resize(2000, 0);
         let mut macho = vec![0xcf, 0xfa, 0xed, 0xfe];
         macho.resize(2000, 0);
-        assert!(is_program(&elf) && is_program(&macho));
+        let mut exe = b"MZ".to_vec();
+        exe.resize(2000, 0);
+        assert!(is_program(&elf) && is_program(&macho) && is_program(&exe));
         assert!(!is_program(b"<!doctype html>"));
         assert!(!is_program(&vec![b'#'; 2000]));
     }

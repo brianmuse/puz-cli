@@ -11,9 +11,19 @@ The command is `puz`. The package is `puz-cli`.
 
 ## Install
 
+macOS and Linux:
+
 ```sh
 curl -fsSL https://swords.cx/install.sh | sh   # puts puz in ~/.local/bin and runs puz setup
 ```
+
+Windows (PowerShell):
+
+```powershell
+irm https://swords.cx/install.ps1 | iex   # puts puz in %LOCALAPPDATA%\Programs\puz, adds it to your PATH, runs puz setup
+```
+
+There are builds for macOS (Apple Silicon and Intel), Linux (x64 and arm64) and Windows (x64).
 
 Or build it:
 

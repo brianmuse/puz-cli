@@ -465,7 +465,8 @@ enum Cmd {
     /// Your details as a constructor: name, address, city line and email. The name is the author of
     /// new puzzles, of exports and of published puzzles with no author (`puz setup` sets it too).
     /// All four go at the top of page 1 of the NYT submission PDF (`puz publish nyt`). With no options, show them. They are kept in one
-    /// file: $PUZ_PROFILE, else profile.json in $PUZ_CONFIG_DIR, $XDG_CONFIG_HOME/puz or ~/.config/puz.
+    /// file: $PUZ_PROFILE, else profile.json in $PUZ_CONFIG_DIR, $XDG_CONFIG_HOME/puz or ~/.config/puz
+    /// (%APPDATA%\puz on Windows).
     Profile {
         /// Your name
         #[arg(long)]

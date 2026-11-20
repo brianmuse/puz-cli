@@ -10,9 +10,12 @@ keywords = ["crossword", "puzzle", "puz", "jpz"]
 categories = ["parser-implementations", "games"]
 
 [features]
-default = ["pdf"]
+default = ["pdf", "swords"]
 # PDF export (the one-page PDF and submission PDFs). Without it, PDF export fails with a message.
 pdf = ["dep:svg2pdf", "dep:pdf-writer"]
+# Publishing to a Swords solving site (the `swords` module). It uses the network. Turn it off to
+# build for targets with no network stack, such as WebAssembly in a browser.
+swords = ["dep:swords-client"]
 
 [dependencies]
 anyhow.workspace = true
@@ -21,4 +24,4 @@ resvg.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 svg2pdf = { workspace = true, optional = true }
-swords-client = { version = "0.5.0", path = "../swords" }
+swords-client = { version = "0.5.0", path = "../swords", optional = true }
