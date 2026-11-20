@@ -27,8 +27,16 @@
 
 ---
 
+macOS and Linux:
+
 ```sh
 curl -fsSL https://swords.cx/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://swords.cx/install.ps1 | iex
 ```
 
 ```console
@@ -52,15 +60,23 @@ H E L L O
 
 ## Install
 
-macOS (Apple silicon):
+macOS and Linux:
 
 ```sh
 curl -fsSL https://swords.cx/install.sh | sh
 ```
 
-This puts `puz` in `~/.local/bin` and runs `puz setup`. `puz` tells you when a new version is out; `puz update` installs it.
+This puts `puz` in `~/.local/bin` and runs `puz setup`.
 
-Other systems: [build from source](#build-from-source).
+Windows (PowerShell):
+
+```powershell
+irm https://swords.cx/install.ps1 | iex
+```
+
+This puts `puz.exe` in `%LOCALAPPDATA%\Programs\puz`, adds that folder to your PATH and runs `puz setup`.
+
+There are builds for macOS (Apple silicon and Intel), Linux (x64 and arm64) and Windows (x64). `puz` tells you when a new version is out; `puz update` installs it. Anything else: [build from source](#build-from-source).
 
 ## Try it
 
