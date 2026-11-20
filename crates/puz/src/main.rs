@@ -12,7 +12,9 @@ use std::path::{Path, PathBuf};
 
 /// puz: make and edit a crossword puzzle file from the command line.
 ///
-/// A puzzle is one JSON file. Every command reads or changes one file and needs nothing else:
+/// A puzzle is one JSON file in ipuz, the open crossword standard (http://ipuz.org), with an
+/// extension for what ipuz can't hold. Older puz JSON files still read, and change to ipuz on their
+/// next save. Every command reads or changes one file and needs nothing else:
 /// no account, no word list, no server. PUZZLE is a file path (my-puzzle.json).
 ///
 /// If you keep your puzzles in one folder, name it with --library or $PUZ_LIBRARY. PUZZLE may
@@ -276,7 +278,7 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// Read an Across Lite .puz or a puzzle .json and write it as a puzzle file. Without --out, the
+    /// Read an Across Lite .puz, an .ipuz, an older .swords or a puzzle .json and write it as a puzzle file. Without --out, the
     /// file is named after the title and goes in the current folder, or in the folder of puzzles.
     Import {
         file: PathBuf,
@@ -380,14 +382,15 @@ enum Cmd {
         #[arg(long)]
         no_images: bool,
     },
-    /// Write the puzzle in another format: .jpz (Amuse Labs / PuzzleMe), .puz (Across Lite), .json,
+    /// Write the puzzle in another format: .ipuz (the open standard, with nothing left out), .jpz
+    /// (Amuse Labs / PuzzleMe), .puz (Across Lite), .json (the older puz JSON),
     /// a .png of the grid, or a printable one-page .pdf. Without --out, the file goes in the current
     /// folder under the puzzle's file name. A puzzle with no author takes your name (`puz profile`).
     /// It only writes a file: to put a puzzle online, or to make the NYT's submission PDF, use `puz publish`.
     Export {
         puzzle: String,
-        /// jpz, puz, json, png (the grid) or pdf (one page: title, grid and clues)
-        #[arg(long, default_value = "jpz")]
+        /// ipuz, jpz, puz, json, png (the grid) or pdf (one page: title, grid and clues)
+        #[arg(long, default_value = "ipuz")]
         format: String,
         #[arg(short, long)]
         out: Option<PathBuf>,

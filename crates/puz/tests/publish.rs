@@ -92,7 +92,9 @@ fn json_of(o: &Output) -> Value {
     serde_json::from_slice(&o.stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {}{}", out(o), err(o)))
 }
 fn links(file: &str) -> Vec<Value> {
+    // Saved files are ipuz: the links sit in the Swords extension.
     let v: Value = serde_json::from_str(&fs::read_to_string(file).unwrap()).unwrap();
+    let v = if v.get(puz_core::ipuz::EXT).is_some() { v[puz_core::ipuz::EXT].clone() } else { v };
     v["swords"].as_array().cloned().unwrap_or_default()
 }
 

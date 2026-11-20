@@ -5,6 +5,7 @@
 //! - `blocks`: black squares with their symmetric partner, and grid shape problems.
 //! - `scene`: the steps of a custom ending.
 //! - `markup`: italics in clue text.
+//! - `ipuz`: the ipuz file format (the format puzzle files are saved in) and its Swords extension.
 //! - `formats`: `.jpz` and `.puz` (Across Lite) import and export.
 //! - `export`: one call for every export format, and import by file name.
 //! - `stats`: grid stats and checks against a paper's published grid rules.
@@ -24,6 +25,7 @@ pub mod export;
 pub mod files;
 pub mod formats;
 pub mod guides;
+pub mod ipuz;
 pub mod markup;
 pub mod print;
 pub mod profile;

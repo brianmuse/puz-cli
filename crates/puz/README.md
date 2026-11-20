@@ -76,7 +76,7 @@ Slots can be `41a`, `17d`, or `5,7,across`. A square is `x,y`: column, then row,
 | Command | What it does |
 |---|---|
 | `puz new "Title" [--size 15x15] [--symmetry rotational] [--folder F] [--from PUZZLE] [--author A] [-o FILE]` | Create a blank puzzle file and print the file name. `--from` copies the size, symmetry and black squares of another puzzle. The author is your name in `puz profile` unless you give one. |
-| `puz import FILE [--folder F] [-o FILE]` | Read an Across Lite `.puz` or a puzzle `.json` and write it as a puzzle file. |
+| `puz import FILE [--folder F] [-o FILE]` | Read an Across Lite `.puz`, an `.ipuz`, an older `.swords` or a puzzle `.json` and write it as a puzzle file. |
 | `puz show PUZZLE [--json]` | Print the grid and every slot with its clue. |
 | `puz stats PUZZLE [--rules auto\|nyt-daily\|...] [--json]` | Grid stats and checks against a paper's rules. See [Stats and paper rules](#stats-and-paper-rules). |
 | `puz guide [TOPIC] [--json]` | Print a built-in how-to guide about the puzzle file. `puz guide` lists them; `puz guide ending` says how to write an ending and its scene. |
@@ -109,7 +109,7 @@ To move a region: `puz copy my-puzzle.json 0,0 4,2 | puz paste my-puzzle.json 10
 
 | Command | What it does |
 |---|---|
-| `puz export PUZZLE [--format jpz\|puz\|json\|png\|pdf] [--answers] [--scale N] [-o FILE]` | Write the puzzle in another format. See [Export](#export). |
+| `puz export PUZZLE [--format ipuz\|jpz\|puz\|json\|png\|pdf] [--answers] [--scale N] [-o FILE]` | Write the puzzle in another format. See [Export](#export). |
 | `puz publish nyt PUZZLE [-o FILE] [--blank-grid] [--name N] [--address A] [--city C] [--email E]` | Write the PDF the NYT asks constructors to send. See [The NYT submission PDF](#the-nyt-submission-pdf). |
 | `puz profile [--name N] [--address A] [--city C] [--email E] [--co-name N ...] [--no-co] [--json]` | Show or set your details as a constructor. See [Your details](#your-details). |
 | `puz card PUZZLE [-o FILE] [--footer TEXT] [--json]` | Make a share card: a 1200 x 630 PNG with the empty grid, the title and the author, for link previews. |
@@ -120,7 +120,11 @@ To move a region: `puz copy my-puzzle.json 0,0 4,2 | puz paste my-puzzle.json 10
 
 ## Puzzle files
 
-A puzzle is one JSON file:
+`puz` saves puzzles as [ipuz](http://ipuz.org), the open JSON crossword standard, so the files open in other crossword apps. What ipuz has no field for (emoji on squares, the ending, locks, share links, and clues keyed by answer) goes in two extension fields, `cx.swords:puzzle` and `cx.swords:clues`. `puz` reads ipuz files from other apps, with or without these fields.
+
+Older files in the puz JSON below still read. A file changes to ipuz on its next save and keeps its name. Before it saves, `puz` turns the puzzle into ipuz and back and checks that nothing changed; if anything would change, it saves the older JSON and prints a note. On that first change it keeps a copy of the old file beside it, as `.NAME.before-ipuz`.
+
+The fields, as `puz` reads them in memory and as the older JSON stores them:
 
 ```json
 {
@@ -260,9 +264,10 @@ It then checks the grid against a paper's rules. Each check passes, warns or fai
 
 | Format | What it is | Keeps | Leaves out (with a warning) |
 |---|---|---|---|
-| `jpz` (the default) | Amuse Labs / PuzzleMe. No linked words; Amuse Labs rejects them. | rebus (multi-letter `solution`), circles (`background-shape="circle"`), shading and colors (`background-color`), walls (`left-bar` / `top-bar` on the next square), gaps (`type="void"`), clue italics (`<i>`) | sprites |
+| `ipuz` (the default) | the open standard, with the extension fields | everything | |
+| `jpz` | Amuse Labs / PuzzleMe. No linked words; Amuse Labs rejects them. | rebus (multi-letter `solution`), circles (`background-shape="circle"`), shading and colors (`background-color`), walls (`left-bar` / `top-bar` on the next square), gaps (`type="void"`), clue italics (`<i>`) | sprites |
 | `puz` | Across Lite | rebus (`GRBS` / `RTBL`), circles (`GEXT`). `puz import` reads both. | shading, walls, sprites, clue italics (clues become plain text). Across Lite numbers the grid without walls, so clues may not line up. |
-| `json` | the puzzle file | everything | |
+| `json` | the older puz JSON | everything | |
 | `png` | the grid | everything: grey shading, colors, circles, thick walls, rebus letters in a smaller font (answer key only), sprites | |
 | `pdf` | one printable page: title, grid and clues | the same as `png`, and clue italics | |
 

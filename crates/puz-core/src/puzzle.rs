@@ -88,6 +88,10 @@ pub struct Puzzle {
     /// holds a key or a PIN.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub swords: Vec<serde_json::Value>,
+    /// Fields this crate does not know, kept as they are, so an edit or a change of file format
+    /// never loses them.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 /// The effects a puzzle may play when it is solved. A solving page draws them.
@@ -224,6 +228,7 @@ impl Puzzle {
             ending: Ending::default(),
             meta: BTreeMap::new(),
             swords: Vec::new(),
+            extra: BTreeMap::new(),
         }
     }
 }
@@ -291,19 +296,54 @@ impl SlotInfo {
 impl Puzzle {
     pub fn load(path: &Path) -> Result<Puzzle> {
         let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        let mut p: Puzzle = serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+        let mut p = Puzzle::from_json(&text).with_context(|| format!("parsing {}", path.display()))?;
         p.tidy();
         p.validate()?;
         Ok(p)
     }
 
-    /// Write the file. Marks that no longer fit the grid are dropped first (see `tidy`).
+    /// A puzzle from JSON text: an ipuz file (with or without the Swords extension) or the older
+    /// puz JSON. Not tidied or checked.
+    pub fn from_json(text: &str) -> Result<Puzzle> {
+        let v: serde_json::Value = serde_json::from_str(text)?;
+        if crate::ipuz::is_ipuz(&v) {
+            crate::ipuz::from_ipuz(&v)
+        } else {
+            Ok(serde_json::from_value(v)?)
+        }
+    }
+
+    /// Write the file as ipuz. Marks that no longer fit the grid are dropped first (see `tidy`).
+    ///
+    /// A file in the older puz JSON changes to ipuz on its first save, keeping its name. Before
+    /// that, the puzzle is turned into ipuz and back, and must come back the same. If it does not,
+    /// the file is saved in the older JSON and a note goes to stderr. On the first change, a copy
+    /// of the old file is kept beside it as `.NAME.before-ipuz` (hidden from listings).
     pub fn save(&self, path: &Path) -> Result<()> {
         let mut p = self.clone();
         p.tidy();
         p.validate()?;
+        let text = match crate::ipuz::to_ipuz_checked(&p) {
+            Ok(v) => {
+                let old = std::fs::read_to_string(path).ok();
+                let was_old_json = old.as_deref().and_then(|t| serde_json::from_str::<serde_json::Value>(t).ok()).is_some_and(|v| !crate::ipuz::is_ipuz(&v));
+                if was_old_json {
+                    if let (Some(old), Some(name)) = (old, path.file_name()) {
+                        let backup = path.with_file_name(format!(".{}.before-ipuz", name.to_string_lossy()));
+                        if !backup.exists() {
+                            std::fs::write(&backup, old).with_context(|| format!("keeping a copy in {}", backup.display()))?;
+                        }
+                    }
+                }
+                serde_json::to_string_pretty(&v)?
+            }
+            Err(e) => {
+                eprintln!("note: {} stays in the older puz JSON format: {e}", path.display());
+                serde_json::to_string_pretty(&p)?
+            }
+        };
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_string_pretty(&p)? + "\n")?;
+        std::fs::write(&tmp, text + "\n")?;
         std::fs::rename(&tmp, path)?; // atomic, so the UI never reads half a file
         Ok(())
     }

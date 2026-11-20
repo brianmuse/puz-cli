@@ -6,7 +6,9 @@ use crate::puzzle::Puzzle;
 use anyhow::{bail, Context, Result};
 
 /// The formats `export` writes.
-pub const FORMATS: [&str; 5] = ["jpz", "puz", "json", "png", "pdf"];
+/// `ipuz` is the open standard with the Swords extension (everything kept); `json` is the older
+/// puz JSON, kept for tools that read it.
+pub const FORMATS: [&str; 6] = ["ipuz", "jpz", "puz", "json", "png", "pdf"];
 
 /// An exported puzzle.
 pub struct Exported {
@@ -23,6 +25,7 @@ pub struct Exported {
 pub fn export(p: &Puzzle, format: &str, answers: bool, scale: f32) -> Result<Exported> {
     let o = PrintOptions { answers };
     let (bytes, mime, dropped) = match format {
+        "ipuz" => ((serde_json::to_string_pretty(&crate::ipuz::to_ipuz(p)?)? + "\n").into_bytes(), "application/json", vec![]),
         "jpz" => (formats::to_jpz(p).into_bytes(), "application/xml", formats::jpz_dropped(p)),
         "puz" => (formats::to_puz(p)?, "application/x-crossword", formats::puz_dropped(p)),
         "json" => ((serde_json::to_string_pretty(p)? + "\n").into_bytes(), "application/json", vec![]),
@@ -33,12 +36,15 @@ pub fn export(p: &Puzzle, format: &str, answers: bool, scale: f32) -> Result<Exp
     Ok(Exported { bytes, mime, dropped })
 }
 
-/// Read a puzzle from the bytes of a file named `name`: a puzzle `.json`, else an Across Lite
-/// `.puz`. A puzzle with no title takes the file's name.
+/// Read a puzzle from the bytes of a file named `name`: `.ipuz` (with or without the Swords
+/// extension), `.swords` or `.json` (the older puz JSON, or ipuz), else an Across Lite `.puz`. A puzzle with no title takes the file's name.
 pub fn import(name: &str, bytes: &[u8]) -> Result<Puzzle> {
     let path = std::path::Path::new(name);
-    let mut p = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("json")) {
-        let p: Puzzle = serde_json::from_slice(bytes).with_context(|| format!("{name} is not a puzzle file"))?;
+    let json = path.extension().is_some_and(|e| ["json", "ipuz", "swords"].iter().any(|x| e.eq_ignore_ascii_case(x)));
+    let mut p = if json {
+        let text = std::str::from_utf8(bytes).with_context(|| format!("{name} is not a puzzle file"))?;
+        let mut p = Puzzle::from_json(text).with_context(|| format!("{name} is not a puzzle file"))?;
+        p.tidy();
         p.validate()?;
         p
     } else {
@@ -65,6 +71,11 @@ mod tests {
         let back = import("My Grid.puz", &export(&p, "puz", false, 1.0).unwrap().bytes).unwrap();
         assert_eq!((back.grid, back.title.as_str()), (p.grid.clone(), "My Grid"));
         let back = import("three.json", &export(&p, "json", false, 1.0).unwrap().bytes).unwrap();
-        assert_eq!((back.grid, back.title.as_str()), (p.grid, "three"));
+        assert_eq!((back.grid.clone(), back.title.as_str()), (p.grid.clone(), "three"));
+        let back = import("three.ipuz", &export(&p, "ipuz", false, 1.0).unwrap().bytes).unwrap();
+        assert_eq!((back.grid.clone(), back.title.as_str()), (p.grid.clone(), "three"));
+        // An old .swords file (the puz JSON) still reads.
+        let back = import("old.swords", &export(&p, "json", false, 1.0).unwrap().bytes).unwrap();
+        assert_eq!(back.grid, p.grid);
     }
 }
