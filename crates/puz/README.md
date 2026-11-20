@@ -114,7 +114,7 @@ To move a region: `puz copy my-puzzle.json 0,0 4,2 | puz paste my-puzzle.json 10
 | `puz profile [--name N] [--address A] [--city C] [--email E] [--co-name N ...] [--no-co] [--json]` | Show or set your details as a constructor. See [Your details](#your-details). |
 | `puz card PUZZLE [-o FILE] [--footer TEXT] [--json]` | Make a share card: a 1200 x 630 PNG with the empty grid, the title and the author, for link previews. |
 | `puz publish PUZZLE [--pin PIN\|--no-pin] [--new] [--site URL] [--json]` | Put a finished puzzle on a Swords solving site and print its link. See [Publish on Swords](#publish-on-swords). |
-| `puz swords COMMAND` | Manage your puzzles on Swords: `status`, `list`, `stats`, `pin`, `unpublish`, `login` and more. |
+| `puz swords COMMAND` | Manage your puzzles on Swords: `status`, `list`, `stats`, `pin`, `protect`, `unpublish`, `login` and more. |
 | `puz setup [--name N] [--email E]` | Save your name, and sign in to Swords by email if you like. |
 | `puz update` | Get the newest puz. |
 
@@ -195,6 +195,7 @@ Each of these commands adds one step. Steps play in the order you add them.
 
 ```
 puz ending PUZZLE --paint "0,0 1,1 2,2" yellow --stagger 0.1    # recolor squares, one after another
+puz ending PUZZLE --paint "0,1 1,1 2,1" pink --stagger 0.08 --enter sweep # each square fills from its left edge
 puz ending PUZZLE --write "0,0 1,1 2,2" SUN                     # change what squares show
 puz ending PUZZLE --line "0,0 2,2 4,0" blue --for 1.5           # draw a line through square middles
 puz ending PUZZLE --image sun.svg --over "5,5,4,4" --enter grow # a picture over a rectangle of squares
@@ -224,7 +225,7 @@ In the puzzle file a scene is `ending.scene`, a list of steps. Each step has a `
 
 | `kind` | Fields |
 | --- | --- |
-| `paint` | `squares`, `color`, `stagger` |
+| `paint` | `squares`, `color`, `stagger`, `enter` (`fade`, `sweep` or `none`) |
 | `write` | `squares`, `text` (one string, or a list with a string for each square), `stagger` |
 | `line` | `through` (points), `color`, `width`, `closed` |
 | `image` | `src` (a `data:image/...;base64,` URL), `over` (`"grid"` or `{"x": 5, "y": 5, "w": 4, "h": 4}`), `fit`, `opacity`, `enter` |
@@ -320,18 +321,20 @@ puz publish my-puzzle.json             # publish, or update the same link
 puz publish my-puzzle.json --pin 4821  # solvers need the PIN to open it
 puz swords status my-puzzle.json       # is it on Swords? is the published copy out of date?
 puz swords list                        # every puzzle you published, with stats
+puz swords protect my-puzzle.json       # no one can delete it until you run: puz swords unprotect
 puz swords unpublish my-puzzle.json --yes
 puz swords --help                      # every swords command
 ```
 
 - The puzzle needs a full grid and a clue for every answer.
+- A protected puzzle cannot be taken down: `unpublish` fails with the site's message until you run `puz swords unprotect`. Updates, old versions and the PIN still work.
 - The link is saved in the puzzle file (`swords`). Publish again to update the same link, even after you rename or move the file. `--new` makes a second link.
 - The key that owns each puzzle stays on your computer, in `~/.config/swords/puzzles.json` (`$SWORDS_HOME` moves the folder). It is never written to the puzzle file.
 - PUZZLE may also be a `.puz`, `.jpz` or `.ipuz` file. Its link is found by the file's path.
 - A puzzle with no author takes your name (`puz setup` or `puz profile --name`).
 - `puz swords login EMAIL` keeps your puzzles with your email, so you can manage them from any device.
 - The site is `--site`, else `$SWORDS_SITE`, else the one set with `puz swords site URL`, else the one puz was built for.
-- In an AI agent's run (`$PUZ_SCRATCH` is set), `puz publish`, `puz swords pin` and `puz swords unpublish` need `--confirmed`, which the agent adds only after you say yes. Sign-in and account commands do not run there at all.
+- In an AI agent's run (`$PUZ_SCRATCH` is set), `puz publish`, `puz swords pin`, `puz swords protect`, `puz swords unprotect` and `puz swords unpublish` need `--confirmed`, which the agent adds only after you say yes. Sign-in and account commands do not run there at all.
 
 The Swords code is the `swords-client` library in `crates/swords`.
 

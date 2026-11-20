@@ -34,6 +34,7 @@ Timing, for the step you add:
 - `--at SECONDS`: when it starts, counted from the solve. Left out, it starts when the step before it ends. Give two steps the same `--at` to play them together.
 - `--for SECONDS`: how long the change takes (0.6 if left out).
 - `--stagger SECONDS` (paint and write): the squares change one after another, in the order you list them.
+- `--enter fade|sweep|none` (paint): how each square takes its new color. `fade` (the default) blends it, `sweep` fills the square from its left edge, `none` swaps it at once.
 
 Other commands: `--scene FILE.json` replaces the whole scene from a JSON list of steps (`-` reads stdin), `--scene-remove N` removes step N, `--scene-clear` removes the scene. `puz ending PUZZLE` lists the steps with their numbers and start times.
 

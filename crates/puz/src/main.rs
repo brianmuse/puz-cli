@@ -361,7 +361,7 @@ enum Cmd {
         /// With --image: 0 to 1
         #[arg(long)]
         opacity: Option<f64>,
-        /// With --image: how it comes in: fade (default), grow or none
+        /// With --image: how it comes in: fade (default), grow or none. With --paint: fade (default), sweep (fills from the left edge) or none
         #[arg(long)]
         enter: Option<String>,
         /// With --line: the width in squares (default 0.12)

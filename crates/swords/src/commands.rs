@@ -60,6 +60,8 @@ pub fn run(ctx: &Ctx, state: &mut State, command: Command) -> Result<()> {
         Command::Restore { puzzle, version } => restore(ctx, state, &puzzle, version),
         Command::Embed { puzzle } => embed(ctx, state, &puzzle),
         Command::Pin { puzzle, pin, remove, .. } => pin_command(ctx, state, &puzzle, pin.as_deref(), remove),
+        Command::Protect { puzzle, .. } => protect_command(ctx, state, &puzzle, true),
+        Command::Unprotect { puzzle, .. } => protect_command(ctx, state, &puzzle, false),
         Command::Open { puzzle } => open(ctx, state, &puzzle),
         Command::Manage { puzzle, yes } => manage(ctx, state, &puzzle, yes),
         Command::Unpublish { puzzle, yes, .. } => delete(ctx, state, &puzzle, yes),
@@ -585,6 +587,18 @@ fn pin_command(ctx: &Ctx, state: &State, name: &str, pin: Option<&str>, remove: 
     };
     let text = format!("{}\n{}", pen.ok(&text), pen.link(&live.text("url")));
     ctx.out(&data, &text);
+    Ok(())
+}
+
+fn protect_command(ctx: &Ctx, state: &State, name: &str, on: bool) -> Result<()> {
+    let p = &state.puzzles[find(state, ctx, name)?];
+    let live = share::set_protected(state, &p.site, &p.id, on).map_err(share::Error::into_anyhow)?;
+    let now = matches!(live.get("protected"), Some(Json::Bool(true)));
+    let data = Json::object([("id", live.field("id")), ("title", live.field("title")), ("url", live.field("url")), ("protected", now.into())]);
+    let pen = ctx.pen();
+    let title = pen.title(&live.text("title"));
+    let text = if now { format!("{title} is protected from deletion.") } else { format!("{title} is no longer protected. It can be deleted.") };
+    ctx.out(&data, &pen.ok(&text));
     Ok(())
 }
 

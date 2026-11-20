@@ -32,6 +32,8 @@ pub const MAX_SECONDS: f64 = 60.0;
 pub const DEFAULT_FOR: f64 = 0.6;
 pub const FITS: [&str; 3] = ["contain", "cover", "stretch"];
 pub const ENTERS: [&str; 3] = ["fade", "grow", "none"];
+/// How a paint step's squares take their new color: blend, fill from the left edge, or swap at once.
+pub const PAINT_ENTERS: [&str; 3] = ["fade", "sweep", "none"];
 /// The image types a scene may embed: (mime type, file extensions).
 pub const IMAGE_TYPES: [(&str, &str); 5] = [("image/png", "png"), ("image/jpeg", "jpg"), ("image/gif", "gif"), ("image/webp", "webp"), ("image/svg+xml", "svg")];
 
@@ -120,7 +122,7 @@ pub struct Rect {
 /// The fields a step of this kind may hold, besides `kind` and `at`.
 pub fn fields(kind: &str) -> &'static [&'static str] {
     match kind {
-        "paint" => &["squares", "color", "stagger", "for"],
+        "paint" => &["squares", "color", "stagger", "enter", "for"],
         "write" => &["squares", "text", "stagger", "for"],
         "line" => &["through", "color", "width", "closed", "for"],
         "image" => &["src", "over", "fit", "opacity", "enter", "for"],
@@ -241,6 +243,9 @@ impl Step {
                     bail!("it needs a \"color\": {}, or hex like #1e9e4a", puzzle::color_names());
                 }
                 color(&self.color)?;
+                if let Some(e) = self.enter.as_deref().filter(|e| !PAINT_ENTERS.contains(e)) {
+                    bail!("enter must be one of {} for paint, not {e:?}", PAINT_ENTERS.join(", "));
+                }
             }
             "write" => {
                 squares()?;
@@ -602,6 +607,7 @@ mod tests {
             (json!({ "kind": "image", "src": PNG, "over": { "x": 0, "y": 0, "w": 1 } }), "step 2 (image)"),
             (json!({ "kind": "image", "src": PNG, "fit": "tile" }), "fit must be one of"),
             (json!({ "kind": "image", "src": PNG, "enter": "spin" }), "enter must be one of"),
+            (json!({ "kind": "paint", "squares": ["0,0"], "color": "red", "enter": "grow" }), "enter must be one of fade, sweep, none for paint"),
             (json!({ "kind": "image", "src": PNG, "opacity": 2 }), "opacity must be from 0 to 1"),
             (json!({ "kind": "text", "text": "" }), "needs \"text\""),
             (json!({ "kind": "text", "text": ["a"] }), "needs \"text\""),

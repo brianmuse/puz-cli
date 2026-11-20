@@ -291,6 +291,14 @@ pub fn set_pin(state: &State, site: &str, id: &str, pin: Option<&str>) -> Result
     Ok(send_pin(state, site, id, pin)?)
 }
 
+/// Turn a puzzle's deletion protection on or off. While it is on, the site refuses [`delete`] with
+/// status 409 and says why. Gives the site's reply (the puzzle, with `protected`).
+pub fn set_protected(state: &State, site: &str, id: &str, on: bool) -> Result<Json, Error> {
+    let key = record(state, site, id).map(|p| p.key.as_str()).unwrap_or("");
+    let body = format!("{{\"protected\":{on}}}");
+    Ok(api::request(Method::Post, &format!("{site}/api/puzzles/{id}/protect"), proof(state, site, key), Body::Json(&body))?)
+}
+
 /// Delete a puzzle from its site for good: its link and its stats go. Then its records leave the state
 /// file; they are given back. A puzzle the site no longer has is an error with status 404 and nothing
 /// is forgotten: call [`forget`] to drop the records all the same.

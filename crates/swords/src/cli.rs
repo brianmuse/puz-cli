@@ -67,6 +67,26 @@ pub enum Command {
         confirmed: bool,
     },
 
+    /// Protect a puzzle from deletion. While it is on, the site refuses to take the puzzle down
+    #[command(after_help = "Example:\n  puz swords protect puzzle.json\n  puz swords unprotect puzzle.json     # it can be deleted again\n\nReplacing the file, old versions and the PIN still work while a puzzle is protected.")]
+    Protect {
+        /// The file you published, the puzzle's id, or its link
+        puzzle: String,
+        /// For AI agent runs only: the user said yes to this change
+        #[arg(long)]
+        confirmed: bool,
+    },
+
+    /// Turn off a puzzle's deletion protection, so it can be taken down again
+    #[command(after_help = "Example:\n  puz swords unprotect puzzle.json\n  puz swords unpublish puzzle.json --yes")]
+    Unprotect {
+        /// The file you published, the puzzle's id, or its link
+        puzzle: String,
+        /// For AI agent runs only: the user said yes to this change
+        #[arg(long)]
+        confirmed: bool,
+    },
+
     /// Open a puzzle's solve page in the browser
     #[command(after_help = "Example:\n  puz swords open puzzle.json")]
     Open {

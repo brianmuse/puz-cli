@@ -21,7 +21,7 @@ pub use sw::in_agent_run;
 
 /// Why an agent may not run a command: these change the account, show a key or open a browser.
 const NO_AGENTS: &str = "An AI agent may not run this command: it is for the user to run in a terminal. \
-An agent may run `puz publish PUZZLE`, `puz swords pin` and `puz swords unpublish` with --confirmed after the user says yes, \
+An agent may run `puz publish PUZZLE`, `puz swords pin`, `puz swords protect|unprotect` and `puz swords unpublish` with --confirmed after the user says yes, \
 and `puz swords status|list|stats|versions|embed|whoami` at any time.";
 
 /// What the user typed for `puz publish` to Swords.
@@ -173,8 +173,8 @@ pub fn agent_check(cmd: &Command) -> Result<()> {
     }
     match cmd {
         Command::List | Command::Stats { .. } | Command::Versions { .. } | Command::Embed { .. } | Command::Whoami => Ok(()),
-        Command::Pin { confirmed: true, .. } | Command::Unpublish { confirmed: true, .. } => Ok(()),
-        Command::Pin { .. } | Command::Unpublish { .. } => bail!(sw::NOT_CONFIRMED),
+        Command::Pin { confirmed: true, .. } | Command::Unpublish { confirmed: true, .. } | Command::Protect { confirmed: true, .. } | Command::Unprotect { confirmed: true, .. } => Ok(()),
+        Command::Pin { .. } | Command::Unpublish { .. } | Command::Protect { .. } | Command::Unprotect { .. } => bail!(sw::NOT_CONFIRMED),
         _ => bail!(NO_AGENTS),
     }
 }
@@ -204,7 +204,7 @@ pub fn group(site: Option<String>, json: bool, extra: Option<Extra>, cmd: Option
                 let f = find(puzzle);
                 as_id(puzzle, f, &env, flag)
             }
-            Command::Pin { puzzle, .. } | Command::Unpublish { puzzle, .. } => {
+            Command::Pin { puzzle, .. } | Command::Unpublish { puzzle, .. } | Command::Protect { puzzle, .. } | Command::Unprotect { puzzle, .. } => {
                 let f = find(puzzle);
                 as_id(puzzle, f, &env, flag)
             }
