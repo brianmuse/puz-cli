@@ -85,7 +85,7 @@ Slots can be `41a`, `17d`, or `5,7,across`. A square is `x,y`: column, then row,
 
 | Command | What it does |
 |---|---|
-| `puz set PUZZLE [--title] [--author] [--copyright] [--notes] [--symmetry] [--target PAPER]` | Set details. `--target` names the paper whose rules `puz stats` checks (`auto` clears it). |
+| `puz set PUZZLE [--title] [--author] [--copyright] [--notes TEXT\|-] [--symmetry] [--target PAPER] [--json]` | Set details. `--notes` is the constructor's note: plain text, line breaks kept, up to 1,000 characters, optional; `-` reads stdin and `""` removes it. It goes in the .puz notepad and the .jpz description, and Swords shows it under the grid. `--target` names the paper whose rules `puz stats` checks (`auto` clears it). |
 | `puz place PUZZLE 41a WORD` | Write a word. `.` clears a square, `_` keeps it (`BE_R`), `[STAR]` puts a rebus in one square (`[STAR]FISH`). |
 | `puz clear PUZZLE 41a` / `puz clear PUZZLE --all` | Clear letters. |
 | `puz clue PUZZLE 41a "Text" [--json]` | Set a clue. `""` removes it. The clue is stored under the answer, so it follows the word. |

@@ -178,6 +178,8 @@ pub fn color_names() -> String {
 /// Smallest and largest grid width or height (`new`, `resize`).
 pub const MIN_SIZE: usize = 2;
 pub const MAX_SIZE: usize = 40;
+/// The most characters a puzzle note may hold (`edit::set_notes`).
+pub const NOTES_MAX: usize = 1000;
 
 /// Largest image a sprite may hold, in bytes of image data.
 pub const SPRITE_MAX_BYTES: usize = 300 * 1024;

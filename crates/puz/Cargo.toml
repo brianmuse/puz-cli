@@ -22,7 +22,7 @@ pdf = ["puz-core/pdf"]
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
-puz-core = { version = "0.7.0", path = "../puz-core", default-features = false, features = ["swords"] }
+puz-core = { version = "0.8.0", path = "../puz-core", default-features = false, features = ["swords"] }
 serde.workspace = true
 serde_json.workspace = true
 swords-client = { version = "0.5.0", path = "../swords" }

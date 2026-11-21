@@ -200,6 +200,19 @@ pub fn clue_problem(answer: &str, clue: &str) -> Option<String> {
 
 /// Set many clues at once from `{ "41a": "text", "5,7,down": "text" }`. All slots are checked before
 /// anything changes.
+/// Set the puzzle note (the constructor's note): plain text, line breaks kept, at most
+/// `NOTES_MAX` characters. Empty text removes it. Returns the stored note.
+pub fn set_notes(p: &mut Puzzle, text: &str) -> Result<String> {
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    let text = text.trim().to_string();
+    let n = text.chars().count();
+    if n > crate::puzzle::NOTES_MAX {
+        bail!("the note has {n} characters; the limit is {}", crate::puzzle::NOTES_MAX);
+    }
+    p.notes = text.clone();
+    Ok(text)
+}
+
 pub fn set_clues(p: &mut Puzzle, clues: &BTreeMap<String, String>) -> Result<Vec<String>> {
     for k in clues.keys() {
         p.find_slot(k)?;
@@ -970,6 +983,16 @@ pub fn label(s: &SlotInfo) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notes_keep_lines_and_cap_length() {
+        let mut p = Puzzle::blank("t", 3, 3, "rotational");
+        assert_eq!(set_notes(&mut p, "  Hi\r\nthere <b>  ").unwrap(), "Hi\nthere <b>");
+        assert!(set_notes(&mut p, &"x".repeat(crate::puzzle::NOTES_MAX + 1)).is_err());
+        assert_eq!(p.notes, "Hi\nthere <b>");
+        set_notes(&mut p, "").unwrap();
+        assert!(p.notes.is_empty());
+    }
 
     #[test]
     fn place_and_clear() {

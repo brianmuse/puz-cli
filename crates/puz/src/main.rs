@@ -77,6 +77,8 @@ enum Cmd {
         author: Option<String>,
         #[arg(long)]
         copyright: Option<String>,
+        /// The constructor's note, shown under the grid while solving. Plain text, line breaks
+        /// kept, up to 1,000 characters. "-" reads stdin; "" removes it.
         #[arg(long)]
         notes: Option<String>,
         /// rotational, mirror, or none
@@ -86,6 +88,9 @@ enum Cmd {
         /// wsj-daily, basic, or auto (pick from the grid size)
         #[arg(long)]
         target: Option<String>,
+        /// Print the puzzle details as JSON
+        #[arg(long)]
+        json: bool,
     },
     /// Write a word into a slot. '.' clears a square, '_' keeps it (e.g. BE_R).
     Place { puzzle: String, slot: String, word: String },
@@ -767,8 +772,12 @@ fn run(cli: Cli) -> Result<i32> {
                 println!("[STAR] in a pattern is a rebus square.");
             }
         }
-        Cmd::Set { puzzle, title, author, copyright, notes, symmetry, target } => {
+        Cmd::Set { puzzle, title, author, copyright, notes, symmetry, target, json } => {
             let (mut p, f) = ctx.load(&puzzle)?;
+            if let Some(n) = notes {
+                let n = if n == "-" { std::io::read_to_string(std::io::stdin())? } else { n };
+                edit::set_notes(&mut p, &n)?;
+            }
             if let Some(t) = target {
                 p.target = stats::parse_target(&t)?;
             }
@@ -777,12 +786,16 @@ fn run(cli: Cli) -> Result<i32> {
             {
                 bail!("symmetry must be rotational, mirror, or none");
             }
-            for (field, v) in [(&mut p.title, title), (&mut p.author, author), (&mut p.copyright, copyright), (&mut p.notes, notes), (&mut p.symmetry, symmetry)] {
+            for (field, v) in [(&mut p.title, title), (&mut p.author, author), (&mut p.copyright, copyright), (&mut p.symmetry, symmetry)] {
                 if let Some(v) = v {
                     *field = v;
                 }
             }
             p.save(&f)?;
+            if json {
+                let v = serde_json::json!({ "title": p.title, "author": p.author, "copyright": p.copyright, "notes": p.notes, "symmetry": p.symmetry });
+                println!("{}", serde_json::to_string_pretty(&v)?);
+            }
         }
         Cmd::Place { puzzle, slot, word } => {
             let (mut p, f) = ctx.load(&puzzle)?;

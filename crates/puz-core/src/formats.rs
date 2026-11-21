@@ -29,10 +29,11 @@ pub fn to_jpz(p: &Puzzle) -> String {
         r##"<applet-settings width="720" height="600" cursor-color="#00b100" selected-cells-color="#80ff80"><completion friendly-submit="false" only-if-correct="true">Congratulations!</completion><actions graphical-buttons="false" wide-buttons="false" buttons-layout="left"><reveal-word label="Reveal Word"/><reveal-letter label="Reveal"/><check label="Check"/><solution label="Solution"/><pencil label="Pencil"/></actions></applet-settings>"##.into(),
         r#"<rectangular-puzzle xmlns="http://crossword.info/xml/rectangular-puzzle" alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ">"#.into(),
         format!(
-            "<metadata><title>{}</title><creator>{}</creator><copyright>{}</copyright><description></description></metadata>",
+            "<metadata><title>{}</title><creator>{}</creator><copyright>{}</copyright><description>{}</description></metadata>",
             xml_escape(&p.title),
             xml_escape(&p.author),
-            xml_escape(&p.copyright)
+            xml_escape(&p.copyright),
+            xml_escape(&p.notes)
         ),
         "<crossword>".into(),
         format!(r#"<grid width="{}" height="{}">"#, p.width(), p.height()),
