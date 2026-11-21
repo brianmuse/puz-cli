@@ -322,6 +322,7 @@ puz publish my-puzzle.json --pin 4821  # solvers need the PIN to open it
 puz swords status my-puzzle.json       # is it on Swords? is the published copy out of date?
 puz swords list                        # every puzzle you published, with stats
 puz swords protect my-puzzle.json       # no one can delete it until you run: puz swords unprotect
+puz swords links my-puzzle.json --add Sam  # a link for one person, so you see their solve
 puz swords unpublish my-puzzle.json --yes
 puz swords --help                      # every swords command
 ```
@@ -330,11 +331,12 @@ puz swords --help                      # every swords command
 - A protected puzzle cannot be taken down: `unpublish` fails with the site's message until you run `puz swords unprotect`. Updates, old versions and the PIN still work.
 - The link is saved in the puzzle file (`swords`). Publish again to update the same link, even after you rename or move the file. `--new` makes a second link.
 - The key that owns each puzzle stays on your computer, in `~/.config/swords/puzzles.json` (`$SWORDS_HOME` moves the folder). It is never written to the puzzle file.
+- `puz swords links PUZZLE` lists your links for people, with how each solve went. `--add NAME` makes one: the puzzle's link plus `?s=CODE`. `--remove NAME|CODE` deletes one. Only you see the names. The solve page takes the code out of the address bar, so a link the person passes on is the plain one. Your owner page shows each person's solve under Solving.
 - PUZZLE may also be a `.puz`, `.jpz` or `.ipuz` file. Its link is found by the file's path.
 - A puzzle with no author takes your name (`puz setup` or `puz profile --name`).
 - `puz swords login EMAIL` keeps your puzzles with your email, so you can manage them from any device.
 - The site is `--site`, else `$SWORDS_SITE`, else the one set with `puz swords site URL`, else the one puz was built for.
-- In an AI agent's run (`$PUZ_SCRATCH` is set), `puz publish`, `puz swords pin`, `puz swords protect`, `puz swords unprotect` and `puz swords unpublish` need `--confirmed`, which the agent adds only after you say yes. Sign-in and account commands do not run there at all.
+- In an AI agent's run (`$PUZ_SCRATCH` is set), `puz publish`, `puz swords pin`, `puz swords protect`, `puz swords unprotect`, `puz swords unpublish` and `puz swords links --add|--remove` need `--confirmed`, which the agent adds only after you say yes. Sign-in and account commands do not run there at all.
 
 The Swords code is the `swords-client` library in `crates/swords`.
 

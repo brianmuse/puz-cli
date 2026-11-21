@@ -60,6 +60,7 @@ pub fn run(ctx: &Ctx, state: &mut State, command: Command) -> Result<()> {
         Command::Restore { puzzle, version } => restore(ctx, state, &puzzle, version),
         Command::Embed { puzzle } => embed(ctx, state, &puzzle),
         Command::Pin { puzzle, pin, remove, .. } => pin_command(ctx, state, &puzzle, pin.as_deref(), remove),
+        Command::Links { puzzle, add, remove, .. } => links(ctx, state, &puzzle, add.as_deref(), remove.as_deref()),
         Command::Protect { puzzle, .. } => protect_command(ctx, state, &puzzle, true),
         Command::Unprotect { puzzle, .. } => protect_command(ctx, state, &puzzle, false),
         Command::Open { puzzle } => open(ctx, state, &puzzle),
@@ -590,6 +591,64 @@ fn pin_command(ctx: &Ctx, state: &State, name: &str, pin: Option<&str>, remove: 
     Ok(())
 }
 
+/// The body of a call that makes a link for a person: `{"name":"Sam"}`.
+pub fn link_body(name: &str) -> String {
+    serde_json::json!({ "name": name.trim() }).to_string()
+}
+
+/// The link that `--remove` names: by code first, then by name (any case).
+pub fn pick_link<'a>(links: &'a [Json], what: &str) -> Option<&'a Json> {
+    let what = what.trim();
+    links.iter().find(|l| l.text("code") == what).or_else(|| links.iter().find(|l| l.text("name").to_lowercase() == what.to_lowercase()))
+}
+
+/// How one person's solve went, in a few words: `finished 4:10 (clean)`, `started, 40% filled`, `opened`, `not opened`.
+pub fn link_status(l: &Json) -> String {
+    let n = |key: &str| l.get(key).and_then(Json::as_f64).unwrap_or(0.0);
+    if !l.text("finished").is_empty() {
+        let how = l.text("outcome");
+        format!("finished {}{}", util::clock(n("secs")), if how.is_empty() { String::new() } else { format!(" ({how})") })
+    } else if !l.text("started").is_empty() {
+        format!("started, {}% filled", n("percent"))
+    } else if !l.text("opened").is_empty() {
+        "opened".to_string()
+    } else {
+        "not opened".to_string()
+    }
+}
+
+fn links(ctx: &Ctx, state: &State, name: &str, add: Option<&str>, remove: Option<&str>) -> Result<()> {
+    let p = &state.puzzles[find(state, ctx, name)?];
+    let base = format!("{}/api/puzzles/{}/links", p.site, p.id);
+    let pen = ctx.pen();
+    if let Some(person) = add {
+        let body = link_body(person);
+        let live = api::call(Method::Post, &base, proof(state, &p.site, &p.key), Body::Json(&body))?;
+        let link = live.field("link");
+        let text = format!("{}\n{}", pen.ok(&format!("A link for {}:", link.text("name"))), pen.link(&link.text("url")));
+        ctx.out(&link, &text);
+        return Ok(());
+    }
+    let live = api::call(Method::Get, &base, proof(state, &p.site, &p.key), Body::None)?;
+    let list = live.get("links").map_or(&[][..], Json::as_array);
+    if let Some(what) = remove {
+        let Some(link) = pick_link(list, what) else { bail!("This puzzle has no link for {}. See them with: puz swords links {name}", Json::from(what).pretty()) };
+        let code = link.text("code");
+        api::call(Method::Delete, &format!("{base}/{code}"), proof(state, &p.site, &p.key), Body::None)?;
+        let data = Json::object([("removed", code.clone().into()), ("name", link.field("name"))]);
+        ctx.out(&data, &pen.ok(&format!("Deleted the link for {}. It now opens the puzzle like the plain link.", link.text("name"))));
+        return Ok(());
+    }
+    let text = if list.is_empty() {
+        format!("No links for people yet. Make one with: puz swords links {name} --add NAME")
+    } else {
+        let lines: Vec<String> = list.iter().map(|l| format!("{}  {}  {}", l.text("name"), link_status(l), l.text("url"))).collect();
+        lines.join("\n")
+    };
+    ctx.out(&live, &text);
+    Ok(())
+}
+
 fn protect_command(ctx: &Ctx, state: &State, name: &str, on: bool) -> Result<()> {
     let p = &state.puzzles[find(state, ctx, name)?];
     let live = share::set_protected(state, &p.site, &p.id, on).map_err(share::Error::into_anyhow)?;
@@ -881,6 +940,19 @@ mod tests {
         assert_eq!(list_text(&row), "Secret [PIN]\n  http://localhost:4747/p/aaaa1111/\n  0 opened · 0 started · 0 solved");
         // A site from before PINs sends no `locked`: the puzzle is not marked.
         assert_eq!(list_row(&p, Some(&Json::parse(br#"{"title":"Old"}"#))).get("locked"), Some(&Json::Bool(false)));
+    }
+
+    #[test]
+    fn links_are_found_by_code_then_name() {
+        let list = [Json::parse(br#"{"code":"abcd2345","name":"Sam"}"#), Json::parse(br#"{"code":"sam","name":"Al"}"#)];
+        assert_eq!(pick_link(&list, "abcd2345").unwrap().text("name"), "Sam");
+        assert_eq!(pick_link(&list, " sam ").unwrap().text("name"), "Al");
+        assert_eq!(pick_link(&list, "SAM").unwrap().text("name"), "Sam");
+        assert!(pick_link(&list, "Jo").is_none());
+        assert_eq!(link_body(" Sam "), r#"{"name":"Sam"}"#);
+        assert_eq!(link_status(&Json::parse(br#"{"finished":"x","secs":250,"outcome":"clean"}"#)), "finished 4:10 (clean)");
+        assert_eq!(link_status(&Json::parse(br#"{"opened":"x","started":"x","percent":40}"#)), "started, 40% filled");
+        assert_eq!(link_status(&Json::parse(br#"{}"#)), "not opened");
     }
 
     #[test]

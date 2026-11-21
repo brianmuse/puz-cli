@@ -87,6 +87,24 @@ pub enum Command {
         confirmed: bool,
     },
 
+    /// List, add or remove links for people: the puzzle's link with a code, so you see that person's solve
+    #[command(
+        after_help = "Example:\n  puz swords links puzzle.json                  # each link, and how that person's solve went\n  puz swords links puzzle.json --add \"Sam\"      # a new link for Sam\n  puz swords links puzzle.json --remove Sam     # by name or by code\n\nThe link is the puzzle's link plus ?s=CODE. The person sees the normal puzzle; the solve page takes the code out\nof the address bar. The names are only shown to you. Your owner page shows each person's solve under Solving."
+    )]
+    Links {
+        /// The file you published, the puzzle's id, or its link
+        puzzle: String,
+        /// Make a link for this person (a name only you see)
+        #[arg(long, value_name = "NAME", conflicts_with = "remove")]
+        add: Option<String>,
+        /// Delete a link, by its name or its code. The link then opens the puzzle like the plain one
+        #[arg(long, value_name = "NAME|CODE")]
+        remove: Option<String>,
+        /// For AI agent runs only: the user said yes to this change
+        #[arg(long)]
+        confirmed: bool,
+    },
+
     /// Open a puzzle's solve page in the browser
     #[command(after_help = "Example:\n  puz swords open puzzle.json")]
     Open {
@@ -184,6 +202,8 @@ mod tests {
 
     #[test]
     fn every_command_parses() {
+        assert_eq!(command(&["links", "a.puz"]), Command::Links { puzzle: s("a.puz"), add: None, remove: None, confirmed: false });
+        assert_eq!(command(&["links", "a.puz", "--add", "Sam"]), Command::Links { puzzle: s("a.puz"), add: Some(s("Sam")), remove: None, confirmed: false });
         assert_eq!(command(&["pin", "a.puz"]), Command::Pin { puzzle: s("a.puz"), pin: None, remove: false, confirmed: false });
         assert_eq!(command(&["pin", "a.puz", "4821"]), Command::Pin { puzzle: s("a.puz"), pin: Some(s("4821")), remove: false, confirmed: false });
         assert_eq!(command(&["pin", "--remove", "a.puz", "--confirmed"]), Command::Pin { puzzle: s("a.puz"), pin: None, remove: true, confirmed: true });
@@ -219,6 +239,7 @@ mod tests {
         let kind = |words: &[&str]| parse(words).unwrap_err().kind();
         assert_eq!(kind(&["nope"]), ErrorKind::InvalidSubcommand);
         assert_eq!(kind(&["pin"]), ErrorKind::MissingRequiredArgument);
+        assert_eq!(kind(&["links", "a.puz", "--add", "Sam", "--remove", "Al"]), ErrorKind::ArgumentConflict);
         assert_eq!(kind(&["restore", "a.puz"]), ErrorKind::MissingRequiredArgument);
         assert_eq!(kind(&["restore", "a.puz", "three"]), ErrorKind::ValueValidation);
         assert_eq!(kind(&["pin", "a.puz", "4821", "--remove"]), ErrorKind::ArgumentConflict);
