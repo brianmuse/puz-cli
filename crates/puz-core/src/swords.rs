@@ -339,14 +339,17 @@ enum Source {
     Other { title: String },
 }
 
-/// Read a file to publish. A `.json` that is a puz puzzle is one; any other file is sent as it is
+/// Read a file to publish. A `.json` that is a puz puzzle is one, and so is a `.ipuz` puz saved; any other file is sent as it is
 /// (the site reads .puz, .jpz, .ipuz and its own .swords). A `.puz` is read here too, to check it is ready.
 fn source(file: &Path) -> Result<(Source, Vec<u8>)> {
     if !file.exists() {
         bail!("no file {}", file.display());
     }
     let ext = file.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    if ext == "json"
+    // A `.ipuz` that puz saved (it has puz's own `cx.swords:puzzle` field) is a puz puzzle too, so its link is
+    // kept in it. Any other app's .ipuz is sent as it is and left unchanged.
+    let ours = ext == "json" || (ext == "ipuz" && std::fs::read_to_string(file).is_ok_and(|t| t.contains("\"cx.swords:puzzle\"")));
+    if ours
         && let Ok(p) = Puzzle::load(file)
     {
         return Ok((Source::Puz(Box::new(p)), vec![]));
