@@ -28,6 +28,10 @@ pub struct Puzzle {
     /// keyed every clue by slot; `tidy` moves those to answer keys.
     #[serde(default)]
     pub clues: BTreeMap<String, String>,
+    /// Picture clues, keyed like `clues` (by answer, else by slot): an image the solver sees with
+    /// the clue, and its description. A picture clue's text may be empty. See `pictures`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pictures: BTreeMap<String, CluePicture>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub finished: bool,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -154,6 +158,15 @@ pub struct Sprite {
     pub alt: Option<String>,
 }
 
+/// A clue's picture: `image` is a `data:image/...;base64,` URL (PNG, JPEG, WebP or GIF).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct CluePicture {
+    pub image: String,
+    /// Text that describes the image, for solvers who cannot see it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub alt: String,
+}
+
 /// Square colors: name, the tint on a white square, the color of a black square.
 /// Editors and solving pages that draw the grid mirror this.
 pub const COLORS: [(&str, &str, &str); 7] = [
@@ -214,6 +227,7 @@ impl Puzzle {
             symmetry: symmetry.into(),
             grid: vec![".".repeat(width); height],
             clues: BTreeMap::new(),
+            pictures: BTreeMap::new(),
             finished: false,
             notes: String::new(),
             rebus: BTreeMap::new(),
@@ -504,6 +518,32 @@ impl Puzzle {
         if self.grid.is_empty() || self.grid.iter().any(|r| r.chars().count() != self.width()) {
             return; // `validate` reports a bad grid
         }
+        self.pictures.retain(|_, pic| !pic.image.trim().is_empty());
+        let lower: Vec<String> = self.pictures.keys().filter(|k| !is_slot_key(k) && k.chars().any(|c| c.is_lowercase())).cloned().collect();
+        for k in lower {
+            let up = k.to_uppercase();
+            if !self.pictures.contains_key(&up) {
+                let pic = self.pictures.remove(&k).unwrap();
+                self.pictures.insert(up, pic);
+            }
+        }
+        if self.grid.is_empty() || self.grid.iter().any(|r| r.chars().count() != self.width()) {
+            return;
+        }
+        for s in self.slots() {
+            let Some(answer) = s.answer() else { continue };
+            let Some(pic) = self.pictures.get(&s.key).cloned() else { continue };
+            match self.pictures.get(&answer) {
+                None => {
+                    self.pictures.remove(&s.key);
+                    self.pictures.insert(answer, pic);
+                }
+                Some(q) if *q == pic => {
+                    self.pictures.remove(&s.key);
+                }
+                Some(_) => {}
+            }
+        }
         for s in self.slots() {
             let Some(answer) = s.answer() else { continue };
             let Some(text) = self.clues.get(&s.key).cloned() else { continue };
@@ -529,6 +569,16 @@ impl Puzzle {
     pub fn clue_for(&self, s: &SlotInfo) -> Option<&str> {
         let get = |k: &str| self.clues.get(k).map(|t| t.trim()).filter(|t| !t.is_empty());
         s.answer().and_then(|a| get(&a)).or_else(|| get(&s.key))
+    }
+
+    /// The key of the picture a slot shows (its answer's, else one keyed by the slot), if any.
+    pub fn picture_key(&self, s: &SlotInfo) -> Option<String> {
+        s.answer().filter(|a| self.pictures.contains_key(a)).or_else(|| self.pictures.contains_key(&s.key).then(|| s.key.clone()))
+    }
+
+    /// The picture a slot shows, if any.
+    pub fn picture_for(&self, s: &SlotInfo) -> Option<&CluePicture> {
+        self.picture_key(s).and_then(|k| self.pictures.get(&k))
     }
 
     /// Stored clues that no slot shows now: answers no longer in the grid, and slot-keyed clues

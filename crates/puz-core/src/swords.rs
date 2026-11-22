@@ -121,7 +121,7 @@ pub fn problems(p: &Puzzle) -> Vec<String> {
     if empty > 0 {
         out.push(format!("{empty} empty square(s)"));
     }
-    let unclued: Vec<String> = p.slots().iter().filter(|s| p.clue_for(s).is_none_or(|c| crate::markup::plain(c).trim().is_empty())).map(crate::edit::label).collect();
+    let unclued: Vec<String> = p.slots().iter().filter(|s| p.picture_for(s).is_none() && p.clue_for(s).is_none_or(|c| crate::markup::plain(c).trim().is_empty())).map(crate::edit::label).collect();
     if !unclued.is_empty() {
         out.push(format!("{} answer(s) with no clue ({})", unclued.len(), unclued.iter().take(6).cloned().collect::<Vec<_>>().join(", ")));
     }
@@ -130,7 +130,9 @@ pub fn problems(p: &Puzzle) -> Vec<String> {
 
 /// What is sent: the puzzle with an empty author filled in with `author` (the user's name), and
 /// without what is only for the constructor (these links, saved submission answers, own fields,
-/// locks, the finished and published marks, the target paper).
+/// locks, the finished and published marks, the target paper). Picture clues the grid shows go as
+/// `images` and `imageAlts`, keyed by slot ("x,y,across"), the way a Swords site reads them; ones no
+/// slot shows are not sent.
 pub fn payload(p: &Puzzle, author: &str) -> Result<Vec<u8>> {
     let mut c = p.clone();
     if c.author.trim().is_empty() {
@@ -143,7 +145,7 @@ pub fn payload(p: &Puzzle, author: &str) -> Result<Vec<u8>> {
     c.finished = false;
     c.published = None;
     c.target = None;
-    Ok(serde_json::to_vec(&c)?)
+    crate::pictures::send_bytes(&c)
 }
 
 /// A short hash of pushed content (FNV-1a, 64 bits, as hex). It only has to notice a change, and
@@ -664,6 +666,18 @@ mod tests {
             }
         });
         (site, calls)
+    }
+
+    #[test]
+    fn picture_clues_are_sent_by_slot() {
+        let mut p = Puzzle::blank("T", 3, 3, "none");
+        p.grid = vec!["CAT".into(), "ARE".into(), "BED".into()];
+        p.tidy();
+        crate::edit::set_picture(&mut p, "1a", Some("data:image/gif;base64,R0lGODlhAQABAAAAACw="), Some("A cat")).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&payload(&p, "").unwrap()).unwrap();
+        assert!(v["images"]["0,0,across"].as_str().unwrap().starts_with("data:image/gif;base64,"));
+        assert_eq!(v["imageAlts"]["0,0,across"], "A cat");
+        assert!(v.get("pictures").is_none());
     }
 
     #[test]

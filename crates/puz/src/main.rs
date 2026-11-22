@@ -109,6 +109,23 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// Set, change or remove a clue's picture (a picture clue). IMAGE is a PNG, JPEG, WebP or GIF file
+    /// of at most 500 KB, embedded in the puzzle; a puzzle holds at most 20. It warns above 250 KB or
+    /// 1200 pixels: about 600 pixels wide is enough. With no IMAGE, --alt changes only the description.
+    /// The clue text may be empty when the picture is the clue.
+    ClueImage {
+        puzzle: String,
+        slot: String,
+        image: Option<std::path::PathBuf>,
+        /// A description of the picture, for solvers who cannot see it
+        #[arg(long)]
+        alt: Option<String>,
+        /// Remove the picture
+        #[arg(long, conflicts_with_all = ["image", "alt"])]
+        remove: bool,
+        #[arg(long)]
+        json: bool,
+    },
     /// Set many clues from a JSON object {"41a": "text", ...}: a file, "-" for stdin, or the JSON itself.
     /// With no FILE, list every answer and its clue.
     Clues {
@@ -827,6 +844,40 @@ fn run(cli: Cli) -> Result<i32> {
                 if let Some(why) = &problem {
                     println!("Warning: {why}. A clue must not give its answer away; write a different clue.");
                 }
+            }
+        }
+        Cmd::ClueImage { puzzle, slot, image, alt, remove, json } => {
+            let (mut p, f) = ctx.load(&puzzle)?;
+            let l = if remove {
+                edit::remove_picture(&mut p, &slot)?
+            } else {
+                if image.is_none() && alt.is_none() {
+                    anyhow::bail!("give an IMAGE file, --alt TEXT or --remove");
+                }
+                let url = image.as_deref().map(puz_core::pictures::from_file).transpose()?;
+                edit::set_picture(&mut p, &slot, url.as_deref(), alt.as_deref())?
+            };
+            p.save(&f)?;
+            let s = p.find_slot(&slot)?;
+            let pic = p.picture_for(&s);
+            // Warnings go to stderr, so --json output stays clean.
+            if let Some((_, b)) = pic.filter(|_| image.is_some()).and_then(|q| puz_core::pictures::decode_url(&q.image)) {
+                for w in puz_core::pictures::warnings(&b) {
+                    eprintln!("warning: {w}");
+                }
+            }
+            let (n, max) = (p.pictures.len(), puz_core::pictures::MAX_IMAGES);
+            if !remove && n + 3 >= max {
+                eprintln!("warning: this puzzle has {n} of the {max} pictures it can hold");
+            }
+            if json {
+                let bytes = pic.and_then(|q| puz_core::pictures::decode_url(&q.image)).map(|(t, b)| serde_json::json!({ "type": t, "bytes": b.len() }));
+                println!("{}", serde_json::json!({ "slot": l, "picture": bytes, "alt": pic.map(|q| q.alt.clone()) }));
+            } else if let Some(q) = pic {
+                let size = puz_core::pictures::decode_url(&q.image).map(|(t, b)| format!("{t}, {} KB", b.len().div_ceil(1000))).unwrap_or_default();
+                println!("{l}: picture set ({size}){}", if q.alt.is_empty() { "\nAdd a description with --alt, for solvers who cannot see it.".to_string() } else { format!(", alt: {}", q.alt) });
+            } else {
+                println!("{l}: picture removed");
             }
         }
         Cmd::Clues { puzzle, file: None, unused, json } => {

@@ -27,6 +27,7 @@ pub mod formats;
 pub mod guides;
 pub mod ipuz;
 pub mod markup;
+pub mod pictures;
 pub mod print;
 pub mod profile;
 pub mod puzzle;

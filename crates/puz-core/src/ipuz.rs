@@ -12,9 +12,12 @@
 //!   clues no answer shows now). Volatile on `puzzle`, `solution` and `clues`: an app that changes
 //!   those should drop it, and then the numbered clues are read.
 //!
+//! A picture clue is written as an object, `{"number", "clue", "image", "cx.swords:alt"}`, with
+//! the image as a data URL; its text may be empty. Pictures no slot shows go in `cx.swords:puzzle`.
+//!
 //! A file with no extension is read from the standard fields alone.
 
-use crate::puzzle::{square_key, Dir, Puzzle, BOTTOM, COLORS, RIGHT};
+use crate::puzzle::{square_key, CluePicture, Dir, Puzzle, BOTTOM, COLORS, RIGHT};
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,9 +28,11 @@ pub const KIND: &str = "http://ipuz.org/crossword#1";
 pub const EXT: &str = "cx.swords:puzzle";
 /// The extension field for the clues keyed by answer.
 pub const EXT_CLUES: &str = "cx.swords:clues";
+/// The field on a clue object for its picture's description.
+pub const ALT: &str = "cx.swords:alt";
 
 /// Puzzle fields that go in standard ipuz fields, so they are left out of the extension.
-const STANDARD: [&str; 11] = ["title", "author", "copyright", "notes", "grid", "clues", "rebus", "circles", "shaded", "colors", "absent"];
+const STANDARD: [&str; 12] = ["title", "author", "copyright", "notes", "grid", "clues", "pictures", "rebus", "circles", "shaded", "colors", "absent"];
 /// Walls also map to standard fields.
 const BARS: &str = "bars";
 
@@ -80,10 +85,27 @@ pub fn to_ipuz(p: &Puzzle) -> Result<Value> {
         solution.push(Value::Array(srow));
     }
     let (mut across, mut down) = (vec![], vec![]);
+    let mut shown_pictures = BTreeSet::new();
     for s in &slots {
-        if let Some(text) = p.clue_for(s) {
-            let list = if s.dir == Dir::Across { &mut across } else { &mut down };
-            list.push(json!([s.number, text]));
+        let text = p.clue_for(s);
+        let picture = p.picture_key(s).and_then(|k| p.pictures.get_key_value(&k));
+        if text.is_none() && picture.is_none() {
+            continue;
+        }
+        let list = if s.dir == Dir::Across { &mut across } else { &mut down };
+        match picture {
+            Some((k, pic)) => {
+                shown_pictures.insert(k.clone());
+                let mut o = Map::new();
+                o.insert("number".into(), json!(s.number));
+                o.insert("clue".into(), json!(text.unwrap_or("")));
+                o.insert("image".into(), json!(pic.image));
+                if !pic.alt.is_empty() {
+                    o.insert(ALT.into(), json!(pic.alt));
+                }
+                list.push(Value::Object(o));
+            }
+            None => list.push(json!([s.number, text])),
         }
     }
     let mut out = Map::new();
@@ -103,6 +125,10 @@ pub fn to_ipuz(p: &Puzzle) -> Result<Value> {
     let Value::Object(mut ext) = serde_json::to_value(p)? else { bail!("puzzle is not an object") };
     for k in STANDARD.iter().chain([&BARS]) {
         ext.remove(*k);
+    }
+    let unshown: BTreeMap<_, _> = p.pictures.iter().filter(|(k, _)| !shown_pictures.contains(*k)).collect();
+    if !unshown.is_empty() {
+        ext.insert("pictures".into(), serde_json::to_value(unshown)?);
     }
     out.insert("volatile".into(), json!({ EXT: "", EXT_CLUES: "puzzle,solution,clues" }));
     out.insert(EXT.into(), Value::Object(ext));
@@ -256,6 +282,13 @@ pub fn from_ipuz(v: &Value) -> Result<Puzzle> {
         Some(c @ Value::Object(_)) => serde_json::from_value(c.clone())?,
         _ => numbered_clues(&p, v.get("clues")),
     };
+    for (s, pic) in numbered_pictures(&p, v.get("clues")) {
+        let key = match s.answer() {
+            Some(a) if p.clues.contains_key(&a) || !p.clues.contains_key(&s.key) => a,
+            _ => s.key.clone(),
+        };
+        p.pictures.entry(key).or_insert(pic);
+    }
     Ok(p)
 }
 
@@ -263,9 +296,36 @@ pub fn from_ipuz(v: &Value) -> Result<Puzzle> {
 /// grid numbered another way may lose a clue.
 fn numbered_clues(p: &Puzzle, clues: Option<&Value>) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
-    let Some(Value::Object(dirs)) = clues else { return out };
+    each_clue(p, clues, |s, clue| {
+        let text = match clue {
+            Value::Array(a) => a.get(1).and_then(Value::as_str),
+            Value::Object(o) => o.get("clue").and_then(Value::as_str),
+            _ => None,
+        };
+        if let Some(t) = text.filter(|t| !t.trim().is_empty()) {
+            out.insert(s.key.clone(), t.to_string());
+        }
+    });
+    out
+}
+
+/// The pictures on standard clue objects: embedded data URLs only (an http address is skipped).
+fn numbered_pictures(p: &Puzzle, clues: Option<&Value>) -> Vec<(crate::puzzle::SlotInfo, CluePicture)> {
+    let mut out = vec![];
+    each_clue(p, clues, |s, clue| {
+        let Value::Object(o) = clue else { return };
+        let Some(image) = o.get("image").and_then(Value::as_str).map(str::trim).filter(|i| i.get(..5).is_some_and(|h| h.eq_ignore_ascii_case("data:"))) else { return };
+        let alt = o.get(ALT).and_then(Value::as_str).unwrap_or("").trim().to_string();
+        out.push((s.clone(), CluePicture { image: image.to_string(), alt }));
+    });
+    out
+}
+
+/// Call `f` with each standard clue and the slot its number names.
+fn each_clue(p: &Puzzle, clues: Option<&Value>, mut f: impl FnMut(&crate::puzzle::SlotInfo, &Value)) {
+    let Some(Value::Object(dirs)) = clues else { return };
     if p.grid.is_empty() || p.grid.iter().any(|r| r.chars().count() != p.width()) {
-        return out;
+        return;
     }
     let slots = p.slots();
     for (name, list) in dirs {
@@ -275,19 +335,18 @@ fn numbered_clues(p: &Puzzle, clues: Option<&Value>) -> BTreeMap<String, String>
             _ => continue,
         };
         for clue in list.as_array().into_iter().flatten() {
-            let (number, text) = match clue {
-                Value::Array(a) => (a.first().cloned(), a.get(1).and_then(Value::as_str).map(String::from)),
-                Value::Object(o) => (o.get("number").cloned(), o.get("clue").and_then(Value::as_str).map(String::from)),
+            let number = match clue {
+                Value::Array(a) => a.first(),
+                Value::Object(o) => o.get("number"),
                 _ => continue,
             };
             let number = number.and_then(|n| n.as_u64().map(|n| n as usize).or_else(|| n.as_str().and_then(|s| s.trim().parse().ok())));
-            let (Some(n), Some(t)) = (number, text) else { continue };
+            let Some(n) = number else { continue };
             if let Some(s) = slots.iter().find(|s| s.number == n && s.dir == dir) {
-                out.insert(s.key.clone(), t);
+                f(s, clue);
             }
         }
     }
-    out
 }
 
 #[cfg(test)]
@@ -330,6 +389,51 @@ mod tests {
         assert!(v[EXT].get("grid").is_none());
         let text = serde_json::to_string_pretty(&v).unwrap();
         assert_eq!(Puzzle::from_json(&text).unwrap(), p);
+    }
+
+    const PNG: &str = "data:image/png;base64,iVBORw0KGgoAAAAAAAAAAA==";
+
+    #[test]
+    fn picture_clues_round_trip() {
+        let mut p = rich();
+        crate::edit::set_picture(&mut p, "1a", Some(PNG), Some("A polo shirt")).unwrap();
+        // A picture clue with no text, on an incomplete-free slot with no clue.
+        crate::edit::set_clue(&mut p, "2d", "").unwrap();
+        crate::edit::set_picture(&mut p, "2d", Some(PNG), None).unwrap();
+        // A picture no slot shows now.
+        p.pictures.insert("GONE".into(), CluePicture { image: PNG.into(), alt: "kept".into() });
+        p.tidy();
+        assert!(p.pictures.contains_key("POLO"));
+        let v = to_ipuz_checked(&p).unwrap();
+        assert_eq!(v["clues"]["Across"][0], json!({"number": 1, "clue": "Collared <i>knit</i> shirt", "image": PNG, ALT: "A polo shirt"}));
+        let d2 = v["clues"]["Down"].as_array().unwrap().iter().find(|c| c["number"] == json!(2)).unwrap();
+        assert_eq!(d2, &json!({"number": 2, "clue": "", "image": PNG}));
+        assert_eq!(v[EXT]["pictures"]["GONE"]["alt"], json!("kept"));
+        assert!(v[EXT]["pictures"].get("POLO").is_none());
+        assert!(v[EXT_CLUES].as_object().unwrap().values().all(Value::is_string));
+        let text = serde_json::to_string_pretty(&v).unwrap();
+        let back = Puzzle::from_json(&text).unwrap();
+        assert_eq!(back, p);
+        // Clues with no picture keep the short form.
+        assert!(v["clues"]["Down"].as_array().unwrap().iter().any(Value::is_array));
+        crate::edit::remove_picture(&mut p, "1a").unwrap();
+        assert_eq!(to_ipuz(&p).unwrap()["clues"]["Across"][0], json!([1, "Collared <i>knit</i> shirt"]));
+    }
+
+    #[test]
+    fn reads_picture_clues_from_other_apps() {
+        let v = json!({
+            "version": "http://ipuz.org/v2", "kind": ["http://ipuz.org/crossword#1"],
+            "dimensions": {"width": 3, "height": 1},
+            "puzzle": [[1, 0, 0]], "solution": [["C", "A", "T"]],
+            "clues": {"Across": [{"number": 1, "clue": "", "image": PNG, "cx.swords:alt": "A cat"}]}
+        });
+        let mut p = from_ipuz(&v).unwrap();
+        p.tidy();
+        assert_eq!(p.pictures["CAT"], CluePicture { image: PNG.into(), alt: "A cat".into() });
+        let mut v2 = v.clone();
+        v2["clues"]["Across"][0]["image"] = json!("https://example.com/cat.png");
+        assert!(from_ipuz(&v2).unwrap().pictures.is_empty());
     }
 
     #[test]

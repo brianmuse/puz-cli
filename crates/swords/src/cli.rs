@@ -87,6 +87,43 @@ pub enum Command {
         confirmed: bool,
     },
 
+    /// Show or change a published puzzle's title, constructor's note and solve note, in place on the site
+    /// (no new version: the stats and solvers' progress stay). Your local file is not changed
+    #[command(after_help = "Example:\n  puz swords details puzzle.json\n  puz swords details puzzle.json --title \"Sunday Best\" --solve-note \"Nice solve!\"\n  puz swords details puzzle.json --notes \"\"     # take the note off\n\nLimits: title 200 characters, notes 1000, solve note 140.")]
+    Details {
+        /// The file you published, the puzzle's id, or its link
+        puzzle: String,
+        /// The new title
+        #[arg(long)]
+        title: Option<String>,
+        /// The constructor's note, shown under the grid while solving
+        #[arg(long)]
+        notes: Option<String>,
+        /// The line in the "Solved" box
+        #[arg(long)]
+        solve_note: Option<String>,
+        /// For AI agent runs only: the user said yes to this change
+        #[arg(long)]
+        confirmed: bool,
+    },
+
+    /// Give a puzzle to a new owner by email. They get a link to accept; when they do, the puzzle is theirs,
+    /// it gets a new key, and you lose it
+    #[command(after_help = "Example:\n  puz swords transfer puzzle.json sam@example.com\n  puz swords transfer puzzle.json --cancel\n  puz swords transfer puzzle.json              # the pending transfer, if any\n\nThe link works once, for 7 days. A new transfer replaces the pending one.")]
+    Transfer {
+        /// The file you published, the puzzle's id, or its link
+        puzzle: String,
+        /// The new owner's email
+        #[arg(conflicts_with = "cancel")]
+        email: Option<String>,
+        /// Cancel the pending transfer
+        #[arg(long)]
+        cancel: bool,
+        /// For AI agent runs only: the user said yes to this change
+        #[arg(long)]
+        confirmed: bool,
+    },
+
     /// List, add or remove links for people: the puzzle's link with a code, so you see that person's solve
     #[command(
         after_help = "Example:\n  puz swords links puzzle.json                  # each link, and how that person's solve went\n  puz swords links puzzle.json --add \"Sam\"      # a new link for Sam\n  puz swords links puzzle.json --remove Sam     # by name or by code\n\nThe link is the puzzle's link plus ?s=CODE. The person sees the normal puzzle; the solve page takes the code out\nof the address bar. The names are only shown to you. Your owner page shows each person's solve under Solving."

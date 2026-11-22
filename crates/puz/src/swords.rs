@@ -175,8 +175,9 @@ pub fn agent_check(cmd: &Command) -> Result<()> {
         Command::List | Command::Stats { .. } | Command::Versions { .. } | Command::Embed { .. } | Command::Whoami => Ok(()),
         Command::Links { add: None, remove: None, .. } | Command::Links { confirmed: true, .. } => Ok(()),
         Command::Links { .. } => bail!(sw::NOT_CONFIRMED),
-        Command::Pin { confirmed: true, .. } | Command::Unpublish { confirmed: true, .. } | Command::Protect { confirmed: true, .. } | Command::Unprotect { confirmed: true, .. } => Ok(()),
-        Command::Pin { .. } | Command::Unpublish { .. } | Command::Protect { .. } | Command::Unprotect { .. } => bail!(sw::NOT_CONFIRMED),
+        Command::Pin { confirmed: true, .. } | Command::Unpublish { confirmed: true, .. } | Command::Protect { confirmed: true, .. } | Command::Unprotect { confirmed: true, .. } | Command::Transfer { confirmed: true, .. } | Command::Details { confirmed: true, .. } => Ok(()),
+        Command::Transfer { email: None, cancel: false, .. } | Command::Details { title: None, notes: None, solve_note: None, .. } => Ok(()),
+        Command::Pin { .. } | Command::Unpublish { .. } | Command::Protect { .. } | Command::Unprotect { .. } | Command::Transfer { .. } | Command::Details { .. } => bail!(sw::NOT_CONFIRMED),
         _ => bail!(NO_AGENTS),
     }
 }
@@ -291,6 +292,10 @@ mod tests {
         let add = Command::Links { puzzle: s("a"), add: Some(s("Sam")), remove: None, confirmed: false };
         assert!(agent_check(&add).unwrap_err().to_string().contains("only after the user agrees"));
         assert!(agent_check(&Command::Links { puzzle: s("a"), add: None, remove: Some(s("Sam")), confirmed: true }).is_ok());
+        assert!(agent_check(&Command::Transfer { puzzle: s("a"), email: None, cancel: false, confirmed: false }).is_ok());
+        assert!(agent_check(&Command::Transfer { puzzle: s("a"), email: Some(s("b@example.com")), cancel: false, confirmed: false }).is_err());
+        assert!(agent_check(&Command::Details { puzzle: s("a"), title: None, notes: None, solve_note: None, confirmed: false }).is_ok());
+        assert!(agent_check(&Command::Details { puzzle: s("a"), title: Some(s("T")), notes: None, solve_note: None, confirmed: false }).is_err());
         for refused in [Command::Login { email: s("me@example.com") }, Command::Logout, Command::Claim { link: s("l") }, Command::Site { url: None }, Command::Manage { puzzle: s("a"), yes: false }, Command::Open { puzzle: s("a") }] {
             assert!(agent_check(&refused).unwrap_err().to_string().contains("for the user to run"));
         }

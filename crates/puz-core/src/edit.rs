@@ -130,6 +130,43 @@ pub fn set_clue(p: &mut Puzzle, slot: &str, text: &str) -> Result<String> {
     Ok(label(&s))
 }
 
+/// Set a slot's picture clue (see `Puzzle::pictures`). `image` is a data URL (checked by
+/// `pictures::check`); None keeps the current image, so only the description changes. `alt` None
+/// keeps the current description. The picture is stored under the answer, like a clue. Fails on a
+/// bad image, or when the puzzle would have more than `pictures::MAX_IMAGES`. Returns the label.
+pub fn set_picture(p: &mut Puzzle, slot: &str, image: Option<&str>, alt: Option<&str>) -> Result<String> {
+    use crate::pictures;
+    let s = p.find_slot(slot)?;
+    let old_key = p.picture_key(&s);
+    let mut pic = old_key.as_ref().and_then(|k| p.pictures.get(k)).cloned().unwrap_or_default();
+    match image {
+        Some(url) => pic.image = pictures::check(url)?,
+        None if pic.image.is_empty() => bail!("{} has no picture; give an image first", label(&s)),
+        None => {}
+    }
+    if let Some(a) = alt {
+        pic.alt = a.trim().to_string();
+    }
+    if old_key.is_none() && p.pictures.len() >= pictures::MAX_IMAGES {
+        bail!("a puzzle can have at most {} pictures", pictures::MAX_IMAGES);
+    }
+    if let Some(k) = &old_key {
+        p.pictures.remove(k);
+    }
+    p.pictures.insert(p.clue_key(&s), pic);
+    Ok(label(&s))
+}
+
+/// Remove a slot's picture clue (its answer's and any slot-keyed one). Returns the label.
+pub fn remove_picture(p: &mut Puzzle, slot: &str) -> Result<String> {
+    let s = p.find_slot(slot)?;
+    if let Some(a) = s.answer() {
+        p.pictures.remove(&a);
+    }
+    p.pictures.remove(&s.key);
+    Ok(label(&s))
+}
+
 /// One slot and the clue it shows, for `clues --list`.
 #[derive(Debug, Clone, Serialize)]
 pub struct SlotClue {

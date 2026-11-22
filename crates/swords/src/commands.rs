@@ -63,6 +63,8 @@ pub fn run(ctx: &Ctx, state: &mut State, command: Command) -> Result<()> {
         Command::Links { puzzle, add, remove, .. } => links(ctx, state, &puzzle, add.as_deref(), remove.as_deref()),
         Command::Protect { puzzle, .. } => protect_command(ctx, state, &puzzle, true),
         Command::Unprotect { puzzle, .. } => protect_command(ctx, state, &puzzle, false),
+        Command::Details { puzzle, title, notes, solve_note, .. } => details(ctx, state, &puzzle, title, notes, solve_note),
+        Command::Transfer { puzzle, email, cancel, .. } => transfer(ctx, state, &puzzle, email.as_deref(), cancel),
         Command::Open { puzzle } => open(ctx, state, &puzzle),
         Command::Manage { puzzle, yes } => manage(ctx, state, &puzzle, yes),
         Command::Unpublish { puzzle, yes, .. } => delete(ctx, state, &puzzle, yes),
@@ -658,6 +660,60 @@ fn protect_command(ctx: &Ctx, state: &State, name: &str, on: bool) -> Result<()>
     let title = pen.title(&live.text("title"));
     let text = if now { format!("{title} is protected from deletion.") } else { format!("{title} is no longer protected. It can be deleted.") };
     ctx.out(&data, &pen.ok(&text));
+    Ok(())
+}
+
+fn details(ctx: &Ctx, state: &State, name: &str, title: Option<String>, notes: Option<String>, solve_note: Option<String>) -> Result<()> {
+    let p = &state.puzzles[find(state, ctx, name)?];
+    let url = format!("{}/api/puzzles/{}/details", p.site, p.id);
+    let auth = proof(state, &p.site, p.key.as_str());
+    let change = title.is_some() || notes.is_some() || solve_note.is_some();
+    let live = if change {
+        let mut body = serde_json::Map::new();
+        for (k, v) in [("title", title), ("notes", notes), ("solve_note", solve_note)] {
+            if let Some(v) = v {
+                body.insert(k.into(), v.into());
+            }
+        }
+        api::call(Method::Post, &url, auth, Body::Json(&serde_json::Value::Object(body).to_string()))?
+    } else {
+        api::call(Method::Get, &url, auth, Body::None)?
+    };
+    let pen = ctx.pen();
+    let show = |v: String| if v.is_empty() { "(none)".to_string() } else { v };
+    let lines = format!("Title: {}\nConstructor's note: {}\nSolve note: {}", show(live.text("title")), show(live.text("notes")), show(live.text("solve_note")));
+    let text = if change { format!("{}\n{lines}", pen.ok("Saved. Same link, same version.")) } else { lines };
+    ctx.out(&live, &text);
+    Ok(())
+}
+
+fn transfer(ctx: &Ctx, state: &State, name: &str, email: Option<&str>, cancel: bool) -> Result<()> {
+    let p = &state.puzzles[find(state, ctx, name)?];
+    let url = format!("{}/api/puzzles/{}/transfer", p.site, p.id);
+    let auth = proof(state, &p.site, p.key.as_str());
+    let pen = ctx.pen();
+    let title = pen.title(&p.title);
+    let live = if cancel {
+        api::call(Method::Delete, &url, auth, Body::None)?
+    } else if let Some(e) = email {
+        let body = serde_json::json!({ "email": e }).to_string();
+        api::call(Method::Post, &url, auth, Body::Json(&body))?
+    } else {
+        api::call(Method::Get, &url, auth, Body::None)?
+    };
+    let to = live.get("pending").map(|t| t.text("email")).unwrap_or_default();
+    let text = if cancel {
+        format!("The transfer of {title} is cancelled. Its link no longer works.")
+    } else if to.is_empty() {
+        format!("{title} has no pending transfer.")
+    } else if email.is_some() {
+        let dev = live.text("dev_link");
+        let extra = if dev.is_empty() { String::new() } else { format!("\nThis local site sends no email. The link: {dev}") };
+        format!("Sent {to} a link to accept {title}. It works for 7 days. When they accept, you lose the puzzle.{extra}")
+    } else {
+        format!("{title} waits for {to} to accept.")
+    };
+    ctx.out(&live, &pen.ok(&text));
     Ok(())
 }
 
