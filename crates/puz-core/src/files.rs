@@ -32,6 +32,38 @@ pub fn free_file(dir: &Path, title: &str, taken: &dyn Fn(&str) -> bool) -> PathB
     }
 }
 
+/// True for an Across Lite `.puz` file (by its extension). puz reads these but never writes them:
+/// they can't hold pictures, notes or animations.
+pub fn is_across_lite(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("puz"))
+}
+
+/// Where edits to an Across Lite `.puz` go: `NAME.ipuz` beside it, or `NAME-2.ipuz`, ... when that
+/// file exists. An existing file is never overwritten.
+pub fn ipuz_for(path: &Path) -> PathBuf {
+    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "puzzle".into());
+    let mut n = 1;
+    loop {
+        let name = if n == 1 { format!("{stem}.ipuz") } else { format!("{stem}-{n}.ipuz") };
+        let p = path.with_file_name(name);
+        if !p.exists() {
+            return p;
+        }
+        n += 1;
+    }
+}
+
+/// The note shown when edits to the `.puz` file `from` were saved to `to`.
+pub fn converted_note(from: &Path, to: &Path) -> String {
+    let name = |p: &Path| p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    format!(
+        "note: {} is a .puz file, which can't hold pictures, notes or animations, so edits are saved to {}. Edit {} from now on.",
+        name(from),
+        to.display(),
+        name(to)
+    )
+}
+
 /// The file for a PUZZLE argument: a file path, or a name inside `folder` ("drafts/beer" or
 /// "drafts/beer.json"), when a folder of puzzles is given.
 pub fn find(arg: &str, folder: Option<&Path>) -> Result<PathBuf> {
@@ -41,7 +73,7 @@ pub fn find(arg: &str, folder: Option<&Path>) -> Result<PathBuf> {
     }
     if let Some(dir) = folder {
         let name = arg.trim().trim_matches('/');
-        for f in [dir.join(name), dir.join(format!("{name}.json"))] {
+        for f in [dir.join(name), dir.join(format!("{name}.json")), dir.join(format!("{name}.ipuz")), dir.join(format!("{name}.puz"))] {
             if !name.is_empty() && f.is_file() {
                 return Ok(f);
             }

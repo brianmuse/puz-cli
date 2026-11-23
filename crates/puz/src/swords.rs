@@ -238,7 +238,7 @@ fn status(arg: &str, file: Option<PathBuf>, site: Option<&str>, live: bool, json
     let mut state = State::load(&state_file)?;
     let name = your_name(&mut state, &state_file);
     let pen = if json { Pen::PLAIN } else { Pen::stdout() };
-    let Ok(p) = puz_core::puzzle::Puzzle::load(&file) else {
+    let Ok(p) = sw::load_own(&file) else {
         // Another format holds no record: the state file knows it by its path.
         let link = sw::link_for_file(&file, &env, site);
         if json {

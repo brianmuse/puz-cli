@@ -366,6 +366,15 @@ fn source(file: &Path) -> Result<(Source, Vec<u8>)> {
     Ok((Source::Other { title }, bytes))
 }
 
+/// The puzzle in `file` when it can hold Swords links. An Across Lite `.puz` can't (puz never
+/// writes one), so its link lives in the state file, like any other app's file.
+pub fn load_own(file: &Path) -> Result<Puzzle> {
+    if crate::files::is_across_lite(file) {
+        bail!("{} is a .puz file: it keeps no links", file.display());
+    }
+    Puzzle::load(file)
+}
+
 /// Publish the puzzle in `file` to a Swords site: update the link it has there, or make one. This
 /// saves the key in the swords state file, and nothing in the puzzle file: call `remember` next.
 pub fn send(file: &Path, env: &Env, o: &PushOptions) -> Result<Sent> {
@@ -492,7 +501,7 @@ pub fn link_for_file(file: &Path, env: &Env, site_flag: Option<&str>) -> Option<
     if !file.is_file() {
         return None;
     }
-    if let Ok(p) = Puzzle::load(file) {
+    if let Ok(p) = load_own(file) {
         let all = links(&p);
         if !all.is_empty() {
             return pick(&all, site_flag, &env.site(None).ok()?).ok();
@@ -505,7 +514,7 @@ pub fn link_for_file(file: &Path, env: &Env, site_flag: Option<&str>) -> Option<
 
 /// Set the PIN mark of a link in the puzzle file, after the PIN was changed on the site.
 pub fn mark_pin(file: &Path, site: &str, id: &str, pin: bool) -> Result<()> {
-    let Ok(mut p) = Puzzle::load(file) else { return Ok(()) };
+    let Ok(mut p) = load_own(file) else { return Ok(()) };
     let mut changed = false;
     for v in p.swords.iter_mut().filter(|v| same(v, site, id)) {
         v["pin"] = json!(pin);
@@ -521,7 +530,7 @@ pub fn take_down(file: &Path, env: &Env, site_flag: Option<&str>, confirmed: boo
     if env.agent && !confirmed {
         bail!(NOT_CONFIRMED);
     }
-    let p = Puzzle::load(file)?;
+    let p = load_own(file)?;
     let link = pick(&links(&p), site_flag, &env.site(None)?)?;
     let mut st = env.state()?;
     let key_here = share::key(&st, &link.site, &link.id).is_some();
@@ -539,7 +548,7 @@ pub fn take_down(file: &Path, env: &Env, site_flag: Option<&str>, confirmed: boo
 
 /// Remove a link from the puzzle file. A file that is not a puz puzzle has none: nothing to do.
 pub fn forget(file: &Path, site: &str, id: &str) -> Result<()> {
-    let Ok(mut p) = Puzzle::load(file) else { return Ok(()) };
+    let Ok(mut p) = load_own(file) else { return Ok(()) };
     let before = p.swords.len();
     p.swords.retain(|v| !same(v, site, id));
     if p.swords.len() != before { p.save(file) } else { Ok(()) }

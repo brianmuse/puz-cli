@@ -124,6 +124,8 @@ To move a region: `puz copy my-puzzle.json 0,0 4,2 | puz paste my-puzzle.json 10
 
 Older files in the puz JSON below still read. A file changes to ipuz on its next save and keeps its name. Before it saves, `puz` turns the puzzle into ipuz and back and checks that nothing changed; if anything would change, it saves the older JSON and prints a note. On that first change it keeps a copy of the old file beside it, as `.NAME.before-ipuz`.
 
+Every command also reads an Across Lite `.puz` file, but `puz` never changes one: a `.puz` can't hold pictures, notes or animations. A command that edits a `.puz` saves the result to `NAME.ipuz` beside it (`NAME-2.ipuz` and so on when that file exists) and says so on stderr. Edit the `.ipuz` from then on.
+
 The fields, as `puz` reads them in memory and as the older JSON stores them:
 
 ```json

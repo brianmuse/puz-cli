@@ -310,7 +310,15 @@ impl SlotInfo {
 }
 
 impl Puzzle {
+    /// Read a puzzle file: ipuz or puz JSON, or an Across Lite `.puz` (see `formats::from_puz`).
     pub fn load(path: &Path) -> Result<Puzzle> {
+        if crate::files::is_across_lite(path) {
+            let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+            let mut p = crate::formats::from_puz(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+            p.tidy();
+            p.validate()?;
+            return Ok(p);
+        }
         let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let mut p = Puzzle::from_json(&text).with_context(|| format!("parsing {}", path.display()))?;
         p.tidy();
@@ -335,7 +343,30 @@ impl Puzzle {
     /// that, the puzzle is turned into ipuz and back, and must come back the same. If it does not,
     /// the file is saved in the older JSON and a note goes to stderr. On the first change, a copy
     /// of the old file is kept beside it as `.NAME.before-ipuz` (hidden from listings).
+    ///
+    /// An Across Lite `.puz` is never written: the puzzle goes to a free `NAME.ipuz` beside it
+    /// (see `save_edit`), and a note on stderr names that file.
     pub fn save(&self, path: &Path) -> Result<()> {
+        let to = self.save_edit(path)?;
+        if to != path {
+            eprintln!("{}", crate::files::converted_note(path, &to));
+        }
+        Ok(())
+    }
+
+    /// `save`, but returns the file written: `path`, or for an Across Lite `.puz` the new
+    /// `NAME.ipuz` (`NAME-2.ipuz`, ... when that is taken). Prints nothing.
+    pub fn save_edit(&self, path: &Path) -> Result<std::path::PathBuf> {
+        if crate::files::is_across_lite(path) {
+            let to = crate::files::ipuz_for(path);
+            self.write(&to)?;
+            return Ok(to);
+        }
+        self.write(path)?;
+        Ok(path.to_path_buf())
+    }
+
+    fn write(&self, path: &Path) -> Result<()> {
         let mut p = self.clone();
         p.tidy();
         p.validate()?;
