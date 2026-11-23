@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 /// then also be a name inside that folder: "my-puzzle" or "drafts/my-puzzle.json".
 ///
 /// When a puzzle is done, `puz publish PUZZLE` puts it on a Swords solving site, and
-/// `puz publish nyt PUZZLE` writes the PDF the New York Times asks constructors to send.
+/// `puz export PUZZLE --format nyt` writes the PDF the New York Times asks constructors to send.
 #[derive(Parser)]
 #[command(name = "puz", version, about, after_help = AFTER_HELP)]
 struct Cli {
@@ -406,14 +406,21 @@ enum Cmd {
     },
     /// Write the puzzle in another format: .ipuz (the open standard, with nothing left out), .jpz
     /// (Amuse Labs / PuzzleMe), .puz (Across Lite), .json (the older puz JSON),
-    /// a .png of the grid, or a printable one-page .pdf. Without --out, the file goes in the current
-    /// folder under the puzzle's file name. A puzzle with no author takes your name (`puz profile`).
-    /// It only writes a file: to put a puzzle online, or to make the NYT's submission PDF, use `puz publish`.
+    /// a .png of the grid, a printable one-page .pdf, or the PDF the New York Times asks
+    /// constructors to send (--format nyt). Without --out, the file goes in the current folder under
+    /// the puzzle's file name. A puzzle with no author takes your name (`puz profile`).
+    /// It only writes a file: to put a puzzle online, use `puz publish`.
+    ///
+    /// --format nyt puts your details and the filled grid on page 1, then the clues with their
+    /// answers. It asks at a terminal for details that are missing from your profile (`puz profile`),
+    /// or takes them from --name, --address, --city and --email. The file name is
+    /// LastName_PuzzleTitle.pdf, as the NYT asks.
     Export {
         puzzle: String,
-        /// ipuz, jpz, puz, json, png (the grid) or pdf (one page: title, grid and clues)
+        /// ipuz, jpz, puz, json, png (the grid), pdf (one page: title, grid and clues) or nyt (the NYT submission PDF)
         #[arg(long, default_value = "ipuz")]
         format: String,
+        /// A file. With --format nyt, a file or a folder to put it in; at a terminal, with no file name given, it asks to confirm the name
         #[arg(short, long)]
         out: Option<PathBuf>,
         /// png and pdf: show the letters (an answer key). Default is a blank puzzle.
@@ -422,19 +429,23 @@ enum Cmd {
         /// png: pixels per grid unit (2 = 80 pixels per square)
         #[arg(long, default_value_t = 2.0)]
         scale: f32,
-        /// Old: `--format pdf --style nyt` is now `puz publish nyt PUZZLE`. It still works.
-        #[arg(long, default_value = "page", hide = true)]
-        style: String,
-        #[arg(long, hide = true)]
+        /// nyt: add a page with the blank, numbered grid after the filled grid
+        #[arg(long)]
         blank_grid: bool,
-        #[arg(long, hide = true)]
+        /// nyt: your name, for this run
+        #[arg(long)]
         name: Option<String>,
-        #[arg(long, hide = true)]
+        /// nyt: your street address, for this run
+        #[arg(long)]
         address: Option<String>,
-        #[arg(long, hide = true)]
+        /// nyt: your city, state and ZIP as one line, for this run
+        #[arg(long)]
         city: Option<String>,
-        #[arg(long, hide = true)]
+        /// nyt: your email, for this run
+        #[arg(long)]
         email: Option<String>,
+        #[command(flatten)]
+        look: LookArgs,
     },
     /// Make a puzzle's share card: a 1200 x 630 PNG with the empty grid, the title and the author,
     /// for link previews (og:image).
@@ -449,8 +460,8 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// Put a finished puzzle on a Swords solving site (the default), or write the PDF the NYT asks
-    /// constructors to send (`puz publish nyt PUZZLE`).
+    /// Put a finished puzzle on a Swords solving site. For the NYT submission PDF, use
+    /// `puz export PUZZLE --format nyt`.
     ///
     /// `puz publish PUZZLE` sends the puzzle and prints the link to share. The puzzle needs a full
     /// grid and a clue for every answer. The link is saved in the puzzle file, so publishing it
@@ -489,7 +500,7 @@ enum Cmd {
     },
     /// Your details as a constructor: name, address, city line and email. The name is the author of
     /// new puzzles, of exports and of published puzzles with no author (`puz setup` sets it too).
-    /// All four go at the top of page 1 of the NYT submission PDF (`puz publish nyt`). With no options, show them. They are kept in one
+    /// All four go at the top of page 1 of the NYT submission PDF (`puz export --format nyt`). With no options, show them. They are kept in one
     /// file: $PUZ_PROFILE, else profile.json in $PUZ_CONFIG_DIR, $XDG_CONFIG_HOME/puz or ~/.config/puz
     /// (%APPDATA%\puz on Windows).
     Profile {
@@ -561,30 +572,51 @@ struct SwordsPublish {
 enum PublishTo {
     /// Put the puzzle on a Swords solving site (the same as `puz publish PUZZLE`).
     Swords(SwordsPublish),
-    /// Write the PDF the New York Times asks constructors to send: your details and the filled grid
-    /// on page 1, then the clues with their answers. It asks at a terminal for details that are
-    /// missing from your profile (`puz profile`), or takes them from --name, --address, --city and --email.
-    Nyt {
-        puzzle: String,
-        /// Where to write it [default: NAME.pdf in this folder]
-        #[arg(short, long)]
-        out: Option<PathBuf>,
-        /// Add a page with the blank, numbered grid after the filled grid
-        #[arg(long)]
-        blank_grid: bool,
-        /// Your name, for this run
-        #[arg(long)]
-        name: Option<String>,
-        /// Your street address, for this run
-        #[arg(long)]
-        address: Option<String>,
-        /// Your city, state and ZIP as one line, for this run
-        #[arg(long)]
-        city: Option<String>,
-        /// Your email, for this run
-        #[arg(long)]
-        email: Option<String>,
-    },
+}
+
+/// How the NYT submission PDF looks (--format nyt only). With none of these, it looks like NYT's sample.
+#[derive(clap::Args)]
+struct LookArgs {
+    /// nyt: the font: standard (Times text, sans grid letters), serif (Times everywhere) or sans (sans everywhere) [default: standard]
+    #[arg(long, value_parser = ["standard", "serif", "sans"])]
+    font: Option<String>,
+    /// nyt: The size of your details at the top of page 1, in points (8 to 18) [default: 14]
+    #[arg(long, value_name = "PT")]
+    header_size: Option<f32>,
+    /// nyt: The size of the clue text, in points (8 to 18) [default: 12]
+    #[arg(long, value_name = "PT")]
+    clue_size: Option<f32>,
+    /// nyt: Show the number of words and black squares on page 1
+    #[arg(long)]
+    word_count: bool,
+    /// nyt: Put "Page N of M" at the foot of each page
+    #[arg(long)]
+    page_numbers: bool,
+    /// nyt: Draw black squares light grey, to save ink
+    #[arg(long)]
+    inksaver: bool,
+    /// nyt: Draw circled squares as grey shading in place of circles
+    #[arg(long)]
+    shade_circles: bool,
+}
+
+impl LookArgs {
+    /// Is any look flag given?
+    fn is_set(&self) -> bool {
+        self.font.is_some() || self.header_size.is_some() || self.clue_size.is_some() || self.word_count || self.page_numbers || self.inksaver || self.shade_circles
+    }
+
+    fn look(&self) -> Result<submission::Look> {
+        Ok(submission::Look {
+            font: submission::SubFont::parse(self.font.as_deref().unwrap_or("standard"))?,
+            header_size: self.header_size,
+            clue_size: self.clue_size,
+            word_count: self.word_count,
+            page_numbers: self.page_numbers,
+            inksaver: self.inksaver,
+            shade_circles: self.shade_circles,
+        })
+    }
 }
 
 #[derive(clap::Args)]
@@ -611,10 +643,17 @@ enum SwordsCmd {
     Other(swords_client::cli::Command),
 }
 
-/// Write the NYT submission PDF.
-fn write_submission(p: &Puzzle, out: &Path, blank_grid: bool, flags: profile::Update) -> Result<()> {
+/// Write the NYT submission PDF (`puz export --format nyt`) and say where.
+fn export_nyt(ctx: &Ctx, puzzle: &str, out: Option<PathBuf>, blank_grid: bool, flags: profile::Update, look: &LookArgs) -> Result<()> {
+    let look = look.look()?;
+    let (p, file) = ctx.load(puzzle)?;
     let prof = submission_profile(flags)?;
-    std::fs::write(out, submission::pdf(submission::Style::Nyt, p, &submission::options(p, &prof, blank_grid))?)?;
+    // The name the NYT asks for: LastName_PuzzleTitle.pdf.
+    let named = submission::nyt_file_name(&p, &prof.me.name, &file.file_stem().unwrap().to_string_lossy());
+    let out = nyt_out(out, &named)?;
+    let o = submission::SubmissionOptions { look, ..submission::options(&p, &prof, blank_grid) };
+    std::fs::write(&out, submission::pdf(submission::Style::Nyt, &p, &o)?)?;
+    println!("Wrote {}", out.display());
     Ok(())
 }
 
@@ -681,6 +720,26 @@ fn default_author() -> Option<String> {
 }
 
 /// One line typed at the terminal, trimmed.
+/// Where `puz export --format nyt` writes: `out` as a file, or `named` inside `out` when it is a folder (or
+/// in this folder with no `out`). With no file name given, at a terminal and not in an AI agent's
+/// run, it asks to confirm the name; Enter keeps it.
+fn nyt_out(out: Option<PathBuf>, named: &str) -> Result<PathBuf> {
+    let dir = match out {
+        Some(o) if !o.is_dir() && !o.as_os_str().to_string_lossy().ends_with('/') => return Ok(o),
+        Some(o) => o,
+        None => PathBuf::from("."),
+    };
+    let mut name = named.to_string();
+    if !swords::in_agent_run() && std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
+        let got = ask(&format!("Save as [{named}]: "))?;
+        if !got.is_empty() {
+            name = if got.to_lowercase().ends_with(".pdf") { got } else { format!("{got}.pdf") };
+        }
+    }
+    std::fs::create_dir_all(&dir)?;
+    Ok(if dir == Path::new(".") { PathBuf::from(name) } else { dir.join(name) })
+}
+
 fn ask(question: &str) -> Result<String> {
     eprint!("{question}");
     let mut line = String::new();
@@ -1037,13 +1096,6 @@ fn run(cli: Cli) -> Result<i32> {
             let o = match to {
                 Some(PublishTo::Swords(o)) => o,
                 None => swords,
-                Some(PublishTo::Nyt { puzzle, out, blank_grid, name, address, city, email }) => {
-                    let (p, file) = ctx.load(&puzzle)?;
-                    let out = out.unwrap_or_else(|| PathBuf::from(file.file_stem().unwrap()).with_extension("pdf"));
-                    write_submission(&p, &out, blank_grid, profile::Update { name, address, city, email })?;
-                    println!("Wrote {}", out.display());
-                    return Ok(0);
-                }
             };
             let file = match o.puzzle.as_deref() {
                 Some(arg) => {
@@ -1233,29 +1285,25 @@ fn run(cli: Cli) -> Result<i32> {
                 println!("An ending plays on a solving page, when the grid is right.");
             }
         }
-        Cmd::Export { puzzle, format, out, answers, scale, style, blank_grid, name, address, city, email } => {
+        Cmd::Export { puzzle, format, out, answers, scale, blank_grid, name, address, city, email, look } => {
+            let flags = profile::Update { name, address, city, email };
+            let format = format.to_lowercase();
+            if format == "nyt" {
+                export_nyt(&ctx, &puzzle, out, blank_grid, flags, &look)?;
+                return Ok(0);
+            }
+            if blank_grid || !flags.is_empty() || look.is_set() {
+                bail!("--blank-grid, --name, --address, --city, --email and the look options (--font, --header-size, --clue-size, --word-count, --page-numbers, --inksaver, --shade-circles) go with --format nyt");
+            }
             let (mut p, file) = ctx.load(&puzzle)?;
             let out = out.unwrap_or_else(|| PathBuf::from(file.file_stem().unwrap()).with_extension(&format));
-            let flags = profile::Update { name, address, city, email };
-            if style != "page" {
-                if format != "pdf" {
-                    bail!("--style {style} goes with --format pdf");
-                }
-                submission::Style::parse(&style)?;
-                eprintln!("Note: this is now `puz publish nyt {puzzle}`.");
-                write_submission(&p, &out, blank_grid, flags)?;
-            } else {
-                if blank_grid || !flags.is_empty() {
-                    bail!("--blank-grid, --name, --address, --city and --email go with the NYT submission PDF: puz publish nyt PUZZLE");
-                }
-                if p.author.trim().is_empty() {
-                    p.author = default_author().unwrap_or_default();
-                }
-                let e = export::export(&p, &format, answers, scale)?;
-                std::fs::write(&out, e.bytes)?;
-                if !e.dropped.is_empty() {
-                    eprintln!("Warning: .{format} can't hold {}; left out.", e.dropped.join(", "));
-                }
+            if p.author.trim().is_empty() {
+                p.author = default_author().unwrap_or_default();
+            }
+            let e = export::export(&p, &format, answers, scale)?;
+            std::fs::write(&out, e.bytes)?;
+            if !e.dropped.is_empty() {
+                eprintln!("Warning: .{format} can't hold {}; left out.", e.dropped.join(", "));
             }
             println!("Wrote {}", out.display());
         }

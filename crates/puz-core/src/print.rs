@@ -8,7 +8,7 @@ use resvg::usvg;
 use std::fmt::Write;
 use std::sync::{Arc, Mutex};
 
-const FONT: &str = "Helvetica, Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif";
+pub(crate) const FONT: &str = "Helvetica, Arial, 'Liberation Sans', 'DejaVu Sans', sans-serif";
 const EMOJI_FONT: &str = "'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Emoji', 'Twemoji Mozilla', sans-serif";
 
 /// What to draw in the white squares.
@@ -36,13 +36,23 @@ fn numbers(p: &Puzzle) -> Vec<Vec<usize>> {
 /// Layers, bottom to top: squares (white, grey shading, black), sprites, circles, numbers,
 /// letters, walls, outer border.
 fn grid_svg(out: &mut String, p: &Puzzle, x0: f32, y0: f32, cell: f32, o: PrintOptions) {
-    grid_svg_styled(out, p, x0, y0, cell, o, &GridStyle { font: FONT, border: 3.0 })
+    grid_svg_styled(out, p, x0, y0, cell, o, &GridStyle { font: FONT, border: 3.0, ..GridStyle::default() })
 }
 
 /// How a grid looks: the font for numbers and letters, and the outer border's width in thin lines.
+/// `block` is the color of a black square; `shade_circles` draws a circled square as grey
+/// shading instead of a circle.
 pub struct GridStyle {
     pub font: &'static str,
     pub border: f32,
+    pub block: &'static str,
+    pub shade_circles: bool,
+}
+
+impl Default for GridStyle {
+    fn default() -> Self {
+        GridStyle { font: FONT, border: 3.0, block: "#111", shade_circles: false }
+    }
 }
 
 pub fn grid_svg_styled(out: &mut String, p: &Puzzle, x0: f32, y0: f32, cell: f32, o: PrintOptions, st: &GridStyle) {
@@ -65,7 +75,7 @@ pub fn grid_svg_styled(out: &mut String, p: &Puzzle, x0: f32, y0: f32, cell: f32
             let look = p.square_fill(x, y);
             if ch == '#' {
                 // A shaded black square shows dark grey, so the shading is still visible.
-                let fill = look.unwrap_or("#111");
+                let fill = look.unwrap_or(st.block);
                 writeln!(out, r##"<rect x="{cx}" y="{cy}" width="{cell}" height="{cell}" fill="{fill}"/>"##).unwrap();
                 if let Some(sp) = p.sprites.get(&k) {
                     sprite_svg(out, sp, cx, cy, cell, 1.0, "#fff");
@@ -78,7 +88,9 @@ pub fn grid_svg_styled(out: &mut String, p: &Puzzle, x0: f32, y0: f32, cell: f32
                 // Behind the number and letter, faded so they stay readable.
                 sprite_svg(out, sp, cx, cy, cell, 0.55, "#111");
             }
-            if p.circles.contains(&k) {
+            if p.circles.contains(&k) && st.shade_circles {
+                writeln!(out, r##"<rect x="{cx}" y="{cy}" width="{cell}" height="{cell}" fill="#d0d0d0" stroke="#111" stroke-width="{thin}"/>"##).unwrap();
+            } else if p.circles.contains(&k) {
                 writeln!(out, r##"<circle cx="{}" cy="{}" r="{}" fill="none" stroke="#111" stroke-width="{thin}"/>"##, cx + cell / 2.0, cy + cell / 2.0, cell * 0.47).unwrap();
             }
             if nums[y][x] > 0 {
@@ -101,7 +113,8 @@ pub fn grid_svg_styled(out: &mut String, p: &Puzzle, x0: f32, y0: f32, cell: f32
                     out,
                     r##"<text x="{}" y="{}" font-size="{}" font-family="{font}" text-anchor="middle" fill="#111">{}</text>"##,
                     cx + cell / 2.0,
-                    cy + cell * 0.6 + size * 0.43,
+                    // Capitals centered in the space under the number.
+                    cy + cell * 0.62 + size * 0.33,
                     size,
                     esc(&letters)
                 )

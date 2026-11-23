@@ -101,7 +101,7 @@ puz stats my-puzzle.json                # grid stats and a paper's rules
 puz export my-puzzle.json --format pdf  # also puz, jpz, png, json
 puz import puzzle.puz                   # a .puz to a puzzle file
 puz publish my-puzzle.json              # put it on swords.cx and print the link
-puz publish nyt my-puzzle.json          # a NYT submission PDF
+puz export my-puzzle.json --format nyt  # a NYT submission PDF
 puz swords list                         # what you published, with solve stats
 ```
 

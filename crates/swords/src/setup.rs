@@ -15,7 +15,8 @@ use std::io::{IsTerminal as _, Write as _};
 use std::time::Duration;
 
 /// The commands that end the setup.
-pub const TRY_IT: [&str; 2] = ["puz publish hello-world.puz", "puz --help"];
+/// Three first commands: put a puzzle online, make the NYT submission PDF, export a printable PDF.
+pub const TRY_IT: [&str; 3] = ["puz publish hello-world.puz", "puz export my-puzzle.ipuz --format nyt", "puz export my-puzzle.ipuz --format pdf"];
 
 /// The person's name, kept by the program that runs the setup: the name now, and how to save a new one.
 pub struct Names<'a> {

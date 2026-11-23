@@ -162,7 +162,7 @@ pub fn render(p: &Profile) -> String {
         Some(c) => o.push_str(&format!("\nCo-constructor\n{}", block(c))),
         None => o.push_str("\nCo-constructor: none"),
     }
-    o.push_str("\nThese go at the top of page 1 of a submission PDF (export --format pdf --style nyt).");
+    o.push_str("\nThese go at the top of page 1 of a submission PDF (puz export --format nyt).");
     o
 }
 

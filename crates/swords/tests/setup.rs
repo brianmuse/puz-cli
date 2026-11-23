@@ -155,7 +155,7 @@ fn the_questions_save_the_name_and_sign_in_with_the_code() {
     assert_eq!(person.shown[7], "That code is not right. You have 4 tries left.");
     assert_eq!(person.shown[9], "An email went to that address a moment ago. Check your email, or try again in a minute.");
     assert_eq!(person.shown[11], format!("Signed in as me@example.com on {address}. 1 puzzle(s) from this computer are attached to it."));
-    assert_eq!(person.shown[12], "\nTry it:\n  puz publish hello-world.puz\n  puz --help");
+    assert_eq!(person.shown[12], "\nTry it:\n  puz publish hello-world.puz\n  puz export my-puzzle.ipuz --format nyt\n  puz export my-puzzle.ipuz --format pdf");
     assert_eq!(person.shown.len(), 13);
 
     let saved = home.saved();
@@ -189,7 +189,7 @@ fn enter_skips_every_question_and_saves_nothing() {
     assert_eq!(state, State::default());
     assert!(!home.0.join("puzzles.json").exists());
     assert!(calls.lock().unwrap().is_empty());
-    assert_eq!(person.shown[3..], ["Nothing is saved. Run puz setup at any time.", "\nTry it:\n  puz publish hello-world.puz\n  puz --help"]);
+    assert_eq!(person.shown[3..], ["Nothing is saved. Run puz setup at any time.", "\nTry it:\n  puz publish hello-world.puz\n  puz export my-puzzle.ipuz --format nyt\n  puz export my-puzzle.ipuz --format pdf"]);
 }
 
 #[test]

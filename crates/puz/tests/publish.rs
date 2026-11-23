@@ -455,18 +455,34 @@ fn an_old_state_file_keeps_working_and_keys_stay_secret() {
 fn the_nyt_pdf_needs_no_terminal_when_the_details_are_given() {
     let home = Home::new("nyt");
     let file = home.puzzle("tiny.json");
+    let me = ["--name", "A B", "--address", "1 Main St", "--city", "Town, ST 00000", "--email", "a@example.com"];
     let pdf = home.file("out.pdf");
     let pdf = pdf.to_str().unwrap();
-    let o = home.run(&["publish", "nyt", &file, "-o", pdf]);
+    let o = home.run(&["export", &file, "--format", "nyt", "-o", pdf]);
     assert_eq!(o.status.code(), Some(1));
     assert!(err(&o).contains("--name, --address, --city and --email"), "{}", err(&o));
-    let o = home.run(&["publish", "nyt", &file, "-o", pdf, "--name", "A B", "--address", "1 Main St", "--city", "Town, ST 00000", "--email", "a@example.com"]);
+    let o = home.run(&[&["export", &file, "--format", "nyt", "-o", pdf, "--font", "sans", "--word-count"][..], &me].concat());
     assert_eq!(o.status.code(), Some(0), "{}", err(&o));
     assert!(fs::read(pdf).unwrap().starts_with(b"%PDF"));
-    // The old way still works, and points to the new one.
-    let o = home.run(&["export", &file, "--format", "pdf", "--style", "nyt", "-o", pdf, "--name", "A B", "--address", "1 Main St", "--city", "Town, ST 00000", "--email", "a@example.com"]);
+    // A folder for --out: the file takes the name the NYT asks for, LastName_PuzzleTitle.pdf.
+    let dir = home.file("subs");
+    fs::create_dir_all(&dir).unwrap();
+    let o = home.run(&[&["export", &file, "--format", "nyt", "-o", dir.to_str().unwrap()][..], &me].concat());
     assert_eq!(o.status.code(), Some(0), "{}", err(&o));
-    assert!(err(&o).contains("puz publish nyt"), "{}", err(&o));
+    assert!(fs::read(dir.join("B_Tiny.pdf")).unwrap().starts_with(b"%PDF"));
+    // No --out: the same name, in this folder.
+    let o = home.run(&[&["export", &file, "--format", "nyt"][..], &me].concat());
+    assert_eq!(o.status.code(), Some(0), "{}", err(&o));
+    assert!(home.file("B_Tiny.pdf").is_file());
+    // The look and detail options go only with --format nyt.
+    let o = home.run(&["export", &file, "--format", "pdf", "--font", "sans"]);
+    assert_eq!(o.status.code(), Some(1));
+    assert!(err(&o).contains("go with --format nyt"), "{}", err(&o));
+    // `puz publish` is only for Swords now.
+    assert_ne!(home.run(&[&["publish", "nyt", &file][..], &me].concat()).status.code(), Some(0));
+    // Help shows the new way only.
+    assert!(!out(&home.run(&["publish", "--help"])).contains("\n  nyt "));
+    assert!(out(&home.run(&["export", "--help"])).contains("--blank-grid"));
 }
 
 #[test]

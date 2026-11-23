@@ -110,7 +110,7 @@ To move a region: `puz copy my-puzzle.json 0,0 4,2 | puz paste my-puzzle.json 10
 | Command | What it does |
 |---|---|
 | `puz export PUZZLE [--format ipuz\|jpz\|puz\|json\|png\|pdf] [--answers] [--scale N] [-o FILE]` | Write the puzzle in another format. See [Export](#export). |
-| `puz publish nyt PUZZLE [-o FILE] [--blank-grid] [--name N] [--address A] [--city C] [--email E]` | Write the PDF the NYT asks constructors to send. See [The NYT submission PDF](#the-nyt-submission-pdf). |
+| `puz export PUZZLE --format nyt [-o FILE\|FOLDER] [--blank-grid] [--name N] [--address A] [--city C] [--email E]` | Write the PDF the NYT asks constructors to send. See [The NYT submission PDF](#the-nyt-submission-pdf). |
 | `puz profile [--name N] [--address A] [--city C] [--email E] [--co-name N ...] [--no-co] [--json]` | Show or set your details as a constructor. See [Your details](#your-details). |
 | `puz card PUZZLE [-o FILE] [--footer TEXT] [--json]` | Make a share card: a 1200 x 630 PNG with the empty grid, the title and the author, for link previews. |
 | `puz publish PUZZLE [--pin PIN\|--no-pin] [--new] [--site URL] [--json]` | Put a finished puzzle on a Swords solving site and print its link. See [Publish on Swords](#publish-on-swords). |
@@ -281,7 +281,7 @@ It then checks the grid against a paper's rules. Each check passes, warns or fai
 ### The NYT submission PDF
 
 ```sh
-puz publish nyt PUZZLE [--blank-grid] [-o FILE]
+puz export PUZZLE --format nyt [--blank-grid] [-o FILE|FOLDER]
 ```
 
 This writes the PDF the NYT asks constructors to send:
@@ -291,7 +291,8 @@ This writes the PDF the NYT asks constructors to send:
 
 - `--blank-grid` adds a page with the blank, numbered grid after the filled grid.
 - Your details come from `puz profile`. At a terminal, `puz` asks for any that are missing. In a script, give them with `--name`, `--address`, `--city` and `--email`; those apply to this run only.
-- The old form, `puz export PUZZLE --format pdf --style nyt`, still works.
+- The file name is LastName_PuzzleTitle.pdf, as the NYT asks. `-o` takes a file, or a folder to put it in. At a terminal, with no file name given, `puz` asks you to confirm the name.
+- To change the look: `--font standard|serif|sans`, `--header-size PT`, `--clue-size PT`, `--word-count`, `--page-numbers`, `--inksaver` (light grey black squares) and `--shade-circles`. These go only with `--format nyt`.
 
 Check the paper's current spec sheet before you submit.
 
