@@ -5,7 +5,7 @@
 
 use crate::profile::{authors, Contact, Profile};
 use anyhow::{anyhow, bail, Result};
-use crate::print::{esc, grid_svg_styled, line_svg, svg_to_png, text_width, wrap, GridStyle, PrintOptions};
+use crate::print::{clue_and_picture, esc, grid_svg_styled, picture_svg, svg_to_png, text_line_svg, text_width, wrap, GridStyle, PrintOptions};
 use crate::puzzle::{Dir, Puzzle, SlotInfo};
 use std::fmt::Write;
 
@@ -41,6 +41,8 @@ struct SubLayout {
     wrap_pitch: f32,
     /// The clue text wraps at this x; the answer column starts at this x.
     clue_right: f32,
+    /// The most a picture clue's image may be tall.
+    picture_h: f32,
     answer_x: f32,
 }
 
@@ -62,6 +64,7 @@ const SUB: SubLayout = SubLayout {
     pitch: 24.0,
     wrap_pitch: 14.0,
     clue_right: 374.4,
+    picture_h: 108.0,
     answer_x: 388.8,
 };
 
@@ -159,20 +162,24 @@ fn clue_pages(p: &Puzzle) -> Vec<String> {
         for sl in slots.iter().filter(|z| z.dir == dir) {
             let number = format!("{} ", sl.number);
             let text_x = SUB.left + text_width(&number, size) * SERIF_WIDTH;
-            let lines = wrap(p.clue_for(sl).unwrap_or(""), (SUB.clue_right - text_x) / SERIF_WIDTH, size);
-            let height = (lines.len() - 1) as f32 * SUB.wrap_pitch;
+            let (text, picture) = clue_and_picture(p, sl);
+            let text_lines = if text.trim().is_empty() && picture.is_some() { vec![] } else { wrap(&text, (SUB.clue_right - text_x) / SERIF_WIDTH, size) };
+            // A picture goes under the clue's text, or level with the number if there is no text.
+            let pic_top = |y: f32| if text_lines.is_empty() { y - size * 0.8 } else { y + (text_lines.len() - 1) as f32 * SUB.wrap_pitch + size * 0.5 };
+            let pic_h = picture.map_or(0.0, |_| SUB.picture_h);
+            let text_h = text_lines.len().saturating_sub(1) as f32 * SUB.wrap_pitch;
+            let height = if picture.is_some() { pic_top(0.0) + pic_h } else { text_h };
+            let lines = &text_lines;
             if y + height > SUB.last_baseline && !page.is_empty() {
                 new_page(&mut page, &mut y);
             }
             writeln!(page, r##"<text x="{}" y="{y}" font-size="{size}" font-family="{SERIF}" fill="#000">{}</text>"##, SUB.left, sl.number).unwrap();
             for (j, l) in lines.iter().enumerate() {
-                writeln!(
-                    page,
-                    r##"<text x="{text_x}" y="{}" font-size="{size}" font-family="{SERIF}" fill="#000" xml:space="preserve">{}</text>"##,
-                    y + j as f32 * SUB.wrap_pitch,
-                    line_svg(l)
-                )
-                .unwrap();
+                page.push_str(&text_line_svg(text_x, y + j as f32 * SUB.wrap_pitch, size, &format!(r##"font-size="{size}" font-family="{SERIF}" fill="#000""##), l));
+            }
+            if let Some((img, _)) = picture.and_then(|pic| picture_svg(pic, text_x, pic_top(y), SUB.clue_right - text_x, pic_h)) {
+                page.push_str(&img);
+                page.push('\n');
             }
             writeln!(page, r##"<text x="{}" y="{y}" font-size="{size}" font-family="{SERIF}" fill="#000">{}</text>"##, SUB.answer_x, esc(&shown_answer(sl))).unwrap();
             y += height + SUB.pitch;
@@ -289,5 +296,57 @@ mod tests {
         let pdf = submission_pdf(&p, &o).unwrap();
         assert!(pdf.starts_with(b"%PDF"));
         assert!(String::from_utf8_lossy(&pdf).contains(&format!("/Count {}", svgs.len())), "page count");
+    }
+
+    /// Picture clues: the PDFs draw the image (never its data or a placeholder as text); formats
+    /// that can't hold images get "[Picture] <alt text>".
+    #[test]
+    fn picture_clues_in_exports() {
+        let mut pix = resvg::tiny_skia::Pixmap::new(30, 20).unwrap();
+        pix.fill(resvg::tiny_skia::Color::from_rgba8(200, 0, 0, 255));
+        let image = crate::pictures::data_url(&pix.encode_png().unwrap()).unwrap();
+        let mut p = Puzzle::blank("Pics", 5, 5, "none");
+        p.grid = vec!["CATSS".into(), "AAAAA".into(), "AAAAA".into(), "AAAAA".into(), "AAAAA".into()];
+        let slots = p.slots();
+        let (a1, d1) = (slots.iter().find(|s| s.dir == Dir::Across).unwrap(), slots.iter().find(|s| s.dir == Dir::Down).unwrap());
+        p.clues.insert(p.clue_key(a1), "Who's this?".into());
+        p.pictures.insert(a1.key.clone(), crate::puzzle::CluePicture { image: image.clone(), alt: "A red box".into() });
+        p.pictures.insert(d1.key.clone(), crate::puzzle::CluePicture { image, alt: "A cat".into() });
+
+        let svgs = submission_svgs(&p, &SubmissionOptions::default());
+        let clues = svgs[1..].join("");
+        assert_eq!(clues.matches("<image ").count(), 2, "both pictures drawn");
+        assert!(clues.contains("Who&apos;s this?") || clues.contains("Who's this?"));
+        assert!(!clues.contains("[Picture]"));
+        let page = crate::print::page_svg(&p, PrintOptions::default());
+        assert_eq!(page.matches("<image ").count(), 2);
+        // Both draw: the images are ones the renderer reads.
+        assert!(svg_to_png(&svgs[1], 0.5).is_ok());
+
+        assert_eq!(p.clue_text_for(a1).as_deref(), Some("Who's this? [Picture] A red box"));
+        assert_eq!(p.clue_text_for(d1).as_deref(), Some("[Picture] A cat"));
+        let jpz = crate::formats::to_jpz(&p);
+        assert!(jpz.contains(">[Picture] A cat</clue>"), "{jpz}");
+        let puz = crate::formats::to_puz(&p).unwrap();
+        assert!(puz.windows(15).any(|w| w == b"[Picture] A cat"));
+
+        // An image the renderer can't read falls back to the text form.
+        p.pictures.get_mut(&d1.key).unwrap().image = "data:text/plain;base64,aGk=".into();
+        let clues = submission_svgs(&p, &SubmissionOptions::default())[1..].join("");
+        assert!(clues.contains("[Picture] A cat"));
+    }
+
+    /// A clue with emoji: the emoji are drawn as pictures (or a stand-in word), never as text the
+    /// PDF font lacks, and the rest of the clue stays text.
+    #[test]
+    fn emoji_clues_keep_their_text() {
+        let mut p = Puzzle::blank("Emoji", 5, 5, "none");
+        let slots = p.slots();
+        p.clues.insert(p.clue_key(&slots[0]), "\u{1F512} Wrapping an ankle".into());
+        let clues = submission_svgs(&p, &SubmissionOptions::default())[1..].join("");
+        assert!(!clues.contains('\u{1F512}'), "emoji left in the text");
+        assert!(clues.contains(">Wrapping an ankle<") || clues.contains("> Wrapping an ankle<"), "{clues}");
+        assert!(clues.contains("<image ") || clues.contains(">[Locked]<"));
+        assert_eq!(crate::print::emoji_word_for_test("\u{1F511}\u{FE0F}"), "[Key]");
     }
 }

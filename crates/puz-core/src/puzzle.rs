@@ -612,6 +612,21 @@ impl Puzzle {
         self.picture_key(s).and_then(|k| self.pictures.get(&k))
     }
 
+    /// A slot's clue for an export that can't hold images (.puz, text formats): the clue text, and
+    /// for a picture clue "[Picture] <alt text>" after it. None if the slot has neither.
+    pub fn clue_text_for(&self, s: &SlotInfo) -> Option<String> {
+        let text = self.clue_for(s);
+        let Some(pic) = self.picture_for(s) else { return text.map(String::from) };
+        let tag = match pic.alt.trim() {
+            "" => "[Picture]".to_string(),
+            alt => format!("[Picture] {alt}"),
+        };
+        Some(match text {
+            Some(t) => format!("{t} {tag}"),
+            None => tag,
+        })
+    }
+
     /// Stored clues that no slot shows now: answers no longer in the grid, and slot-keyed clues
     /// whose slot is gone or now shows another clue. Pairs of (key, text).
     pub fn unused_clues(&self) -> Vec<(String, String)> {

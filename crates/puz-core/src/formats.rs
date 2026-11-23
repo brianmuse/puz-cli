@@ -88,7 +88,8 @@ pub fn to_jpz(p: &Puzzle) -> String {
     for dir in [Dir::Across, Dir::Down] {
         out.push(format!(r#"<clues ordering="normal"><title><b>{}</b></title>"#, if dir == Dir::Across { "Across" } else { "Down" }));
         for (i, s) in slots.iter().enumerate().filter(|(_, s)| s.dir == dir) {
-            let text = p.clue_for(s).unwrap_or("");
+            let text = p.clue_text_for(s).unwrap_or_default();
+            let text = text.as_str();
             out.push(format!(r#"<clue word="{}" number="{}" format="{}">{}</clue>"#, i + 1, s.number, s.len, crate::markup::to_xml(text)));
         }
         out.push("</clues>".into());
@@ -186,7 +187,7 @@ pub fn to_puz(p: &Puzzle) -> Result<Vec<u8>> {
     }
     let mut slots = p.slots();
     slots.sort_by_key(|s| (s.number, s.dir != Dir::Across));
-    let clues: Vec<Vec<u8>> = slots.iter().map(|s| latin1(&crate::markup::plain(p.clue_for(s).unwrap_or("")))).collect();
+    let clues: Vec<Vec<u8>> = slots.iter().map(|s| latin1(&crate::markup::plain(&p.clue_text_for(s).unwrap_or_default()))).collect();
     let (t, a, cp, notes) = (latin1(&p.title), latin1(&p.author), latin1(&p.copyright), latin1(&p.notes));
     let text_ck = |mut c: u16| {
         for s in [&t, &a, &cp] {

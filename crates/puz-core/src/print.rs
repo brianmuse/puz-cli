@@ -341,10 +341,44 @@ pub fn line_svg(line: &[Run]) -> String {
     line.iter().map(|r| if r.italic { format!(r#"<tspan font-style="italic">{}</tspan>"#, esc(&r.text)) } else { esc(&r.text) }).collect()
 }
 
+/// A picture clue's image as an SVG `<image>`, its top-left corner at `x`, `top`, scaled to fit
+/// `max_w` x `max_h` with its shape kept. Also gives the height drawn. None if the image can't be
+/// read (then show the clue as text, with `Puzzle::clue_text_for`).
+pub fn picture_svg(pic: &crate::puzzle::CluePicture, x: f32, top: f32, max_w: f32, max_h: f32) -> Option<(String, f32)> {
+    let (mime, bytes) = crate::pictures::decode_url(&pic.image)?;
+    if !matches!(mime, "image/png" | "image/jpeg" | "image/gif" | "image/webp") {
+        return None;
+    }
+    let (pw, ph) = crate::pictures::dimensions(&bytes).filter(|&(w, h)| w > 0 && h > 0).unwrap_or((1, 1));
+    let k = (max_w / pw as f32).min(max_h / ph as f32);
+    let (w, h) = (pw as f32 * k, ph as f32 * k);
+    let svg = format!(
+        r#"<image x="{x}" y="{top}" width="{w}" height="{h}" preserveAspectRatio="xMinYMin meet" href="data:{mime};base64,{}"/>"#,
+        crate::pictures::encode(&bytes)
+    );
+    Some((svg, h))
+}
+
+/// The clue text to draw beside a picture, and the picture: the text alone, and for a picture
+/// that can't be drawn, the text with "[Picture] <alt text>".
+pub fn clue_and_picture<'a>(p: &'a Puzzle, s: &crate::puzzle::SlotInfo) -> (String, Option<&'a crate::puzzle::CluePicture>) {
+    match p.picture_for(s) {
+        Some(pic) if crate::pictures::decode_url(&pic.image).is_some_and(|(m, _)| matches!(m, "image/png" | "image/jpeg" | "image/gif" | "image/webp")) => {
+            (p.clue_for(s).unwrap_or("").to_string(), Some(pic))
+        }
+        _ => (p.clue_text_for(s).unwrap_or_default(), None),
+    }
+}
+
+/// How tall a picture clue's image is on the one-page puzzle: about five lines of clue text.
+fn pic_h(size: f32) -> f32 {
+    size * 6.0
+}
+
 /// One line of the clue flow.
-enum Item {
+enum Item<'a> {
     Heading(&'static str),
-    Clue { number: usize, lines: Vec<Vec<Run>> },
+    Clue { number: usize, lines: Vec<Vec<Run>>, picture: Option<&'a crate::puzzle::CluePicture> },
 }
 
 /// A one-page US Letter puzzle as SVG (units are points): title, grid, and both clue lists.
@@ -398,9 +432,9 @@ pub fn page_svg(p: &Puzzle, o: PrintOptions) -> String {
         for (dir, name) in [(Dir::Across, "ACROSS"), (Dir::Down, "DOWN")] {
             items.push(Item::Heading(name));
             for sl in slots.iter().filter(|z| z.dir == dir) {
-                let text = p.clue_for(sl).unwrap_or("");
-                let lines = wrap(text, cols[0].1.min(cols[1].1) - num_w, size);
-                items.push(Item::Clue { number: sl.number, lines });
+                let (text, picture) = clue_and_picture(p, sl);
+                let lines = if text.trim().is_empty() && picture.is_some() { vec![] } else { wrap(&text, cols[0].1.min(cols[1].1) - num_w, size) };
+                items.push(Item::Clue { number: sl.number, lines, picture });
             }
         }
         // Lay out; restart smaller if it overflows.
@@ -410,7 +444,7 @@ pub fn page_svg(p: &Puzzle, o: PrintOptions) -> String {
         for it in &items {
             let (height, first_gap) = match it {
                 Item::Heading(_) => (lead * 1.3, if y > cols[c].2 { lead * 0.6 } else { 0.0 }),
-                Item::Clue { lines, .. } => (lead * lines.len() as f32 + size * 0.25, 0.0),
+                Item::Clue { lines, picture, .. } => (lead * lines.len() as f32 + picture.map_or(0.0, |_| pic_h(size) + size * 0.25) + size * 0.25, 0.0),
             };
             if y + first_gap + height > cols[c].3 {
                 c += 1;
@@ -427,10 +461,17 @@ pub fn page_svg(p: &Puzzle, o: PrintOptions) -> String {
                 Item::Heading(name) => {
                     writeln!(out, r##"<text x="{x}" y="{}" font-size="{}" font-weight="bold" font-family="{FONT}" fill="#111">{name}</text>"##, y + size, size * 1.05).unwrap();
                 }
-                Item::Clue { number, lines } => {
+                Item::Clue { number, lines, picture } => {
                     writeln!(out, r##"<text x="{x}" y="{}" font-size="{size}" font-weight="bold" font-family="{FONT}" fill="#111">{number}</text>"##, y + size).unwrap();
                     for (i, l) in lines.iter().enumerate() {
-                        writeln!(out, r##"<text x="{}" y="{}" font-size="{size}" font-family="{FONT}" fill="#111" xml:space="preserve">{}</text>"##, x + num_w, y + size + i as f32 * lead, line_svg(l)).unwrap();
+                        out.push_str(&text_line_svg(x + num_w, y + size + i as f32 * lead, size, &format!(r##"font-size="{size}" font-family="{FONT}" fill="#111""##), l));
+                    }
+                    if let Some(pic) = picture {
+                        let top = y + lead * lines.len() as f32 + size * 0.25;
+                        if let Some((img, _)) = picture_svg(pic, x + num_w, top, cols[c].1 - num_w, pic_h(size)) {
+                            out.push_str(&img);
+                            out.push('\n');
+                        }
                     }
                 }
             }
@@ -444,6 +485,104 @@ pub fn page_svg(p: &Puzzle, o: PrintOptions) -> String {
     }
     s.push_str("</svg>\n");
     s
+}
+
+/// True for a character that starts an emoji: the PDF's text fonts have no glyph for it, and a
+/// line that holds one can come out as empty boxes, so it is drawn as a picture instead.
+fn is_emoji(c: char) -> bool {
+    matches!(c as u32, 0x1F000..=0x1FAFF | 0x2600..=0x27BF | 0x2B00..=0x2BFF | 0x2300..=0x23FF)
+}
+
+/// True for a character that joins an emoji sequence: variation selectors, the zero-width joiner,
+/// skin tones, keycap marks and tag characters.
+fn emoji_tail(c: char) -> bool {
+    matches!(c as u32, 0xFE0E | 0xFE0F | 0x200D | 0x20E3 | 0x1F3FB..=0x1F3FF | 0xE0020..=0xE007F) || is_emoji(c)
+}
+
+/// A line split into text runs and emoji (each `Err` is one emoji sequence).
+fn split_emoji(line: &[Run]) -> Vec<Result<Run, String>> {
+    let mut out: Vec<Result<Run, String>> = vec![];
+    for r in line {
+        let mut chars = r.text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if is_emoji(c) {
+                let mut e = c.to_string();
+                while let Some(&n) = chars.peek() {
+                    // A joiner pulls in the next emoji; a new emoji with no joiner starts its own.
+                    if !emoji_tail(n) || (is_emoji(n) && !e.ends_with('\u{200D}') && !(0x1F3FB..=0x1F3FF).contains(&(n as u32))) {
+                        break;
+                    }
+                    e.push(n);
+                    chars.next();
+                }
+                out.push(Err(e));
+            } else {
+                match out.last_mut() {
+                    Some(Ok(t)) if t.italic == r.italic => t.text.push(c),
+                    _ => out.push(Ok(Run { text: c.to_string(), italic: r.italic })),
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A readable stand-in for an emoji no font can draw.
+fn emoji_word(e: &str) -> &'static str {
+    match e.trim_end_matches(['\u{FE0F}', '\u{FE0E}']) {
+        "🔒" | "🔐" => "[Locked]",
+        "🔓" => "[Unlocked]",
+        "🔑" | "🗝" => "[Key]",
+        _ => "",
+    }
+}
+
+#[cfg(test)]
+pub fn emoji_word_for_test(e: &str) -> &'static str {
+    emoji_word(e)
+}
+
+/// How wide `text` is as drawn, from a laid-out SVG. `attrs` are the text's font attributes.
+fn measure(attrs: &str, line: &[Run]) -> Option<f32> {
+    let w = |body: String| -> Option<f32> {
+        let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="100"><text x="0" y="50" {attrs} xml:space="preserve">{body}</text></svg>"#);
+        Some(tree(&svg).ok()?.root().abs_bounding_box().width())
+    };
+    // Bars at both ends, so spaces at the ends count.
+    Some(w(format!("|{}|", line_svg(line)))? - w("||".into())?)
+}
+
+/// One line of clue text as SVG at `x`, baseline `y`, with `attrs` (font size, family, fill).
+/// Emoji are drawn as pictures inline (or as a word like "[Key]" if no font draws them), so the
+/// rest of the line always prints.
+pub fn text_line_svg(x: f32, y: f32, size: f32, attrs: &str, line: &[Run]) -> String {
+    let text = |x: f32, runs: &[Run]| format!(r#"<text x="{x}" y="{y}" {attrs} xml:space="preserve">{}</text>"#, line_svg(runs)) + "\n";
+    if !line.iter().any(|r| r.text.chars().any(is_emoji)) {
+        return text(x, line);
+    }
+    let mut out = String::new();
+    let mut cx = x;
+    for part in split_emoji(line) {
+        let runs = match part {
+            Ok(r) => vec![r],
+            Err(e) => match emoji_png(&e) {
+                Some(url) => {
+                    let s = size * 1.05;
+                    out.push_str(&format!(r#"<image x="{cx}" y="{}" width="{s}" height="{s}" href="{url}"/>"#, y - size * 0.85));
+                    out.push('\n');
+                    cx += s + size * 0.1;
+                    continue;
+                }
+                None => vec![Run { text: emoji_word(&e).to_string(), italic: false }],
+            },
+        };
+        if runs[0].text.is_empty() {
+            continue;
+        }
+        out.push_str(&text(cx, &runs));
+        cx += measure(attrs, &runs).unwrap_or_else(|| text_width(&runs[0].text, size));
+    }
+    out
 }
 
 /// An emoji drawn as a 128px PNG data URI, using the system's color emoji font. None if no font
