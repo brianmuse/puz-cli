@@ -7,6 +7,7 @@ use puz_core::puzzle::Puzzle;
 use puz_core::profile::{self, Profile};
 use puz_core::{blocks, edit, export, files, guides, print, puzzle, scene, stats, submission};
 use std::io::IsTerminal;
+use swords_client::style::Pen;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -653,8 +654,24 @@ fn export_nyt(ctx: &Ctx, puzzle: &str, out: Option<PathBuf>, blank_grid: bool, f
     let out = nyt_out(out, &named)?;
     let o = submission::SubmissionOptions { look, ..submission::options(&p, &prof, blank_grid) };
     std::fs::write(&out, submission::pdf(submission::Style::Nyt, &p, &o)?)?;
-    println!("Wrote {}", out.display());
+    wrote(&out);
     Ok(())
+}
+
+/// `Wrote PATH`. At a terminal: a green check, a dim label and the path in bold.
+fn wrote(path: &Path) {
+    let pen = Pen::stdout();
+    let path = path.display().to_string();
+    if pen.rich {
+        println!("{}", pen.ok(&format!("{} {}", pen.dim("Wrote"), pen.bold(&path))));
+    } else {
+        println!("Wrote {path}");
+    }
+}
+
+/// `Warning: text`, with the label in yellow at a terminal. Plain text keeps the label as given.
+fn warning(pen: &Pen, label: &str, text: &str) -> String {
+    format!("{} {text}", pen.yellow(&format!("{label}:")))
 }
 
 fn parse_square(s: &str) -> Result<(usize, usize)> {
@@ -731,7 +748,7 @@ fn nyt_out(out: Option<PathBuf>, named: &str) -> Result<PathBuf> {
     };
     let mut name = named.to_string();
     if !swords::in_agent_run() && std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
-        let got = ask(&format!("Save as [{named}]: "))?;
+        let got = ask("Save as", Some(named))?;
         if !got.is_empty() {
             name = if got.to_lowercase().ends_with(".pdf") { got } else { format!("{got}.pdf") };
         }
@@ -740,8 +757,16 @@ fn nyt_out(out: Option<PathBuf>, named: &str) -> Result<PathBuf> {
     Ok(if dir == Path::new(".") { PathBuf::from(name) } else { dir.join(name) })
 }
 
-fn ask(question: &str) -> Result<String> {
-    eprint!("{question}");
+/// Ask one question on stderr. At a terminal: the label in bold, the default dimmed, and a `›` mark,
+/// like `puz setup`. Plain: `Label [default]: `.
+fn ask(label: &str, default: Option<&str>) -> Result<String> {
+    let pen = Pen::stderr();
+    let default = default.map(|d| format!(" [{d}]")).unwrap_or_default();
+    if pen.rich {
+        eprint!("{}{} {} ", pen.bold(label), pen.dim(&default), pen.prompt());
+    } else {
+        eprint!("{label}{default}: ");
+    }
     let mut line = String::new();
     std::io::stdin().read_line(&mut line)?;
     Ok(line.trim().to_string())
@@ -775,15 +800,15 @@ fn submission_profile(flags: profile::Update) -> Result<Profile> {
             _ => &mut typed.city,
         };
         let hint = if what == "city line" { "City, state and ZIP (one line)".to_string() } else { format!("Your {what}") };
-        *field = Some(ask(&format!("{hint}: "))?);
+        *field = Some(ask(&hint, None)?);
     }
-    let answer = ask(&format!("Save these in {} for next time? [Y/n] ", file.display()))?;
+    let answer = ask(&format!("Save these in {} for next time?", file.display()), Some("Y/n"))?;
     if answer.is_empty() || answer.to_ascii_lowercase().starts_with('y') {
         // Save what was typed on top of the saved profile: this run's flags stay one-off.
         let mut saved = Profile::load(&file)?;
         profile::Update { name: typed.name.clone(), address: typed.address.clone(), city: typed.city.clone(), email: typed.email.clone() }.apply(&mut saved.me);
         saved.save(&file)?;
-        eprintln!("Saved.");
+        eprintln!("{}", Pen::stderr().ok("Saved."));
     }
     typed.apply(&mut prof.me);
     Ok(prof)
@@ -810,7 +835,8 @@ fn main() {
     let code = match run(cli) {
         Ok(code) => code,
         Err(e) => {
-            eprintln!("Error: {e:?}");
+            let pen = Pen::stderr();
+            eprintln!("{} {e:?}", pen.bold(&pen.red("Error:")));
             1
         }
     };
@@ -901,7 +927,7 @@ fn run(cli: Cli) -> Result<i32> {
             } else {
                 println!("{l}: {text}");
                 if let Some(why) = &problem {
-                    println!("Warning: {why}. A clue must not give its answer away; write a different clue.");
+                    println!("{}", warning(&Pen::stdout(), "Warning", &format!("{why}. A clue must not give its answer away; write a different clue.")));
                 }
             }
         }
@@ -922,12 +948,12 @@ fn run(cli: Cli) -> Result<i32> {
             // Warnings go to stderr, so --json output stays clean.
             if let Some((_, b)) = pic.filter(|_| image.is_some()).and_then(|q| puz_core::pictures::decode_url(&q.image)) {
                 for w in puz_core::pictures::warnings(&b) {
-                    eprintln!("warning: {w}");
+                    eprintln!("{}", warning(&Pen::stderr(), "warning", &w.to_string()));
                 }
             }
             let (n, max) = (p.pictures.len(), puz_core::pictures::MAX_IMAGES);
             if !remove && n + 3 >= max {
-                eprintln!("warning: this puzzle has {n} of the {max} pictures it can hold");
+                eprintln!("{}", warning(&Pen::stderr(), "warning", &format!("this puzzle has {n} of the {max} pictures it can hold")));
             }
             if json {
                 let bytes = pic.and_then(|q| puz_core::pictures::decode_url(&q.image)).map(|(t, b)| serde_json::json!({ "type": t, "bytes": b.len() }));
@@ -974,7 +1000,7 @@ fn run(cli: Cli) -> Result<i32> {
             } else {
                 println!("Set {} clue(s): {}", labels.len(), labels.join(", "));
                 for c in &problems {
-                    println!("Warning: {}: {}. A clue must not give its answer away; write a different clue.", c.slot, c.problem.as_deref().unwrap_or(""));
+                    println!("{}", warning(&Pen::stdout(), "Warning", &format!("{}: {}. A clue must not give its answer away; write a different clue.", c.slot, c.problem.as_deref().unwrap_or(""))));
                 }
             }
         }
@@ -986,7 +1012,7 @@ fn run(cli: Cli) -> Result<i32> {
             q.save(&f)?;
             println!("{}", q.print());
             if !problems.is_empty() {
-                println!("Warning: {}", problems.join("; "));
+                println!("{}", warning(&Pen::stdout(), "Warning", &problems.join("; ")));
             }
         }
         Cmd::Mark { puzzle, square, to, circle, shade: _, color, gap, remove, json } => {
@@ -1088,7 +1114,7 @@ fn run(cli: Cli) -> Result<i32> {
             p.save(&f)?;
             println!("{}\nChanged {n} square(s).", p.print());
             if !problems.is_empty() {
-                println!("Warning: {}", problems.join("; "));
+                println!("{}", warning(&Pen::stdout(), "Warning", &problems.join("; ")));
             }
         }
 
@@ -1303,9 +1329,9 @@ fn run(cli: Cli) -> Result<i32> {
             let e = export::export(&p, &format, answers, scale)?;
             std::fs::write(&out, e.bytes)?;
             if !e.dropped.is_empty() {
-                eprintln!("Warning: .{format} can't hold {}; left out.", e.dropped.join(", "));
+                eprintln!("{}", warning(&Pen::stderr(), "Warning", &format!(".{format} can't hold {}; left out.", e.dropped.join(", "))));
             }
-            println!("Wrote {}", out.display());
+            wrote(&out);
         }
         Cmd::Profile { name, address, city, email, co_name, co_address, co_city, co_email, no_co, json } => {
             let file = profile::user_file();
@@ -1337,7 +1363,7 @@ fn run(cli: Cli) -> Result<i32> {
             if json {
                 println!("{}", serde_json::json!({ "out": out.display().to_string(), "width": 1200, "height": 630 }));
             } else {
-                println!("Wrote {}", out.display());
+                wrote(&out);
             }
         }
         Cmd::Guide { topic, json } => match topic {

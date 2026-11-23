@@ -14,8 +14,9 @@ use swords_client::style::Pen;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// How often the quiet check asks the site: once a day.
-const EVERY: u64 = 24 * 60 * 60;
+/// How often the quiet check asks the site: every 4 hours. Releases can come more than once a day,
+/// and the ask runs in the background, so a shorter wait costs nothing.
+const EVERY: u64 = 4 * 60 * 60;
 
 /// The site that serves the builds: `$PUZ_UPDATE_SITE`, else the built-in Swords site.
 pub fn site() -> String {
@@ -222,7 +223,7 @@ fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-/// Is it time to ask the site again? Once a day. A check time in the future (a clock moved back) asks again.
+/// Is it time to ask the site again? Every 4 hours. A check time in the future (a clock moved back) asks again.
 pub fn due(last: &Check, now: u64) -> bool {
     last.checked == 0 || last.checked > now || now - last.checked >= EVERY
 }
@@ -247,7 +248,7 @@ pub fn skip(var: &dyn Fn(&str) -> Option<String>, terminal: bool, json: bool) ->
 
 /// The line that says a newer puz is out, or None.
 pub fn notice(newest: &str, current: &str) -> Option<String> {
-    (plausible(newest) && newer(newest, current)).then(|| format!("A new puz is out: {newest} (you have {current})."))
+    (plausible(newest) && newer(newest, current)).then(|| format!("puz {newest} is out (you have {current}). Run: puz update"))
 }
 
 /// The quiet check for one run. `start` it before the command runs, `finish` it after.
@@ -290,10 +291,14 @@ impl Quiet {
         {
             newest = c.newest;
         }
-        // Set apart from the command's own output: a blank line, a yellow mark, and the command to run.
+        // One line, set apart from the command's own output by a blank line.
         if let Some(line) = notice(&newest, VERSION) {
             let pen = Pen::stderr();
-            eprintln!("\n{}\n{}", pen.caution(&line), pen.cmd("puz update"));
+            let line = match line.split_once("Run: ") {
+                Some((said, cmd)) if pen.color => format!("{}{} {}", pen.dim(said), pen.dim("Run:"), pen.bold(cmd)),
+                _ => line,
+            };
+            eprintln!("\n{}", pen.caution(&line));
         }
     }
 }
@@ -389,8 +394,8 @@ mod tests {
     }
 
     #[test]
-    fn the_check_runs_at_most_once_a_day() {
-        let day = 24 * 60 * 60;
+    fn the_check_runs_at_most_every_4_hours() {
+        let day = 4 * 60 * 60;
         assert!(due(&Check::default(), 1_000_000));
         let last = Check { checked: 1_000_000, newest: "0.2.0".into() };
         assert!(!due(&last, 1_000_000));
@@ -416,7 +421,7 @@ mod tests {
 
     #[test]
     fn the_notice_names_both_versions() {
-        assert_eq!(notice("0.3.0", "0.2.0").as_deref(), Some("A new puz is out: 0.3.0 (you have 0.2.0)."));
+        assert_eq!(notice("0.3.0", "0.2.0").as_deref(), Some("puz 0.3.0 is out (you have 0.2.0). Run: puz update"));
         assert_eq!(notice("0.2.0", "0.2.0"), None);
         assert_eq!(notice("", "0.2.0"), None);
         assert_eq!(notice("<html>", "0.2.0"), None);

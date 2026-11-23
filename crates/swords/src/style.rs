@@ -119,6 +119,12 @@ impl Pen {
     pub fn dim(&self, text: &str) -> String {
         self.paint(DIM, text)
     }
+    pub fn red(&self, text: &str) -> String {
+        self.paint(RED, text)
+    }
+    pub fn yellow(&self, text: &str) -> String {
+        self.paint(YELLOW, text)
+    }
     /// A link inside a line. Nothing is put around it, so it stays easy to click and to copy.
     pub fn url(&self, url: &str) -> String {
         self.paint(CYAN, url)
