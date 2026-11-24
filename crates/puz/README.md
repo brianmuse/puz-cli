@@ -4,6 +4,7 @@
 
 - A puzzle is one JSON file.
 - Every editing command reads or changes one file. It needs nothing else: no account and no server.
+- The fill engine is built in: `puz fill`, `puz autofill`, `puz check` and the other [fill commands](#fill) fill a grid and check it. They need a word list, which puz downloads once (see [The word list](#the-word-list)).
 - `puz publish` puts a finished puzzle on a Swords solving site and gives you a link to share.
 - Commands that report results take `--json`, so a script can read them.
 
@@ -117,6 +118,41 @@ To move a region: `puz copy my-puzzle.json 0,0 4,2 | puz paste my-puzzle.json 10
 | `puz swords COMMAND` | Manage your puzzles on Swords: `status`, `list`, `stats`, `pin`, `protect`, `unpublish`, `login` and more. |
 | `puz setup [--name N] [--email E]` | Save your name, and sign in to Swords by email if you like. |
 | `puz update` | Get the newest puz. |
+| `puz wordlist install\|update\|status\|remove` | Download, refresh, show or delete the word list for the fill commands. See [The word list](#the-word-list). |
+| `puz wordlist use FILE` | Use your own word list file in place of the download. |
+| `puz fill`, `autofill`, `check`, `status`, ... | Fill and check a grid. See [Fill](#fill). |
+
+## Fill
+
+The fill commands work on one puzzle file. They need a word list (see below); `crosswordese` and `collisions` do not. Each takes `--json`. The engine commands also take `--min-score N` (default 50), `--wordlist FILE` (an extra `word;score` list; repeat for more), `--no-default-list` (use only `--wordlist` files) and `--yes` (download the word list without asking).
+
+| Command | What it does |
+|---|---|
+| `puz fill PUZZLE [--timeout S] [--variant N] [--write]` | Fill the empty squares with the raw engine. On failure, show where the grid is stuck. |
+| `puz autofill PUZZLE [--seconds S] [--relax-to N] [--no-blocks] [--write]` | Fill with good words, then work on the weak spots. Use this one to fill. |
+| `puz check PUZZLE [--threshold N]` | Count the words that fit each answer, given its crossings. Fast, no search. |
+| `puz status PUZZLE [--timeout S]` | Is the grid fillable? Searches for one full fill and writes nothing. |
+| `puz viable PUZZLE SLOT [--limit N] [--fills]` | Which words in an answer can be part of a full fill. |
+| `puz find-spot PUZZLE WORD` | Every answer a word fits, and whether the grid still fills with it there. |
+| `puz candidates PUZZLE SLOT [--limit N]` | Words that fit an answer (41a, 17d or 5,7,across). |
+| `puz forced PUZZLE [--write [SLOT\|x,y]]` | Letters and words with only one choice left. |
+| `puz suggest-blocks PUZZLE [--apply N]` | Black squares that make a stuck grid fill. |
+| `puz pattern PUZZLE [--blocks N] [--entry x,y,across=WORD] [--write [N]]` | Build black-square patterns around the answers and rank the ones that fill. |
+| `puz trim-blocks PUZZLE --to N [--write]` | Remove black squares in symmetric pairs while the grid still fills. |
+| `puz crosswordese PUZZLE` (or `--list`) | Short answers that published puzzles use all the time. |
+| `puz green-paint PUZZLE` | Multiword answers that may not be a real phrase (GREENPAINT). |
+| `puz collisions [PATH ...] [--recursive]` | Answers that repeat across puzzle files or folders. |
+| `puz words [ban\|like\|forget\|check WORD ...]` | Your banned words (never in new fill) and liked words (always allowed). Kept in `words.json` beside your profile. |
+
+### The word list
+
+puz has no word list built in. The fill commands use [Spread the Word(list)](https://www.spreadthewordlist.com), downloaded straight from its site (about 4 MB). It is licensed [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): free for non-commercial use, with credit.
+
+- The install script asks: "Install the Spread the Wordlist word list (about 4 MB download, CC BY-NC-SA)? [Y/n]". So does `puz update` when no list is installed. Each asks only at a terminal; otherwise it says how to install the list later.
+- A fill command that finds no list asks the same question at a terminal. If you say no, or there is no terminal, it stops with: "This needs a word list. Run `puz wordlist install`." Add `--yes` (`-y`) to download without asking.
+- `puz wordlist install` downloads it (asking for it by name is the yes). `puz wordlist update` downloads it again. `puz wordlist status [--json]` shows the file, size, number of entries and download date. `puz wordlist remove` deletes it.
+- `puz wordlist use FILE` uses your own list (one `word;score` per line, score 0 to 100) in place of the download. puz reads the file where it is. `puz wordlist remove` goes back to the download.
+- The list lives in the puz data folder: `$PUZ_DATA_DIR`, else `$XDG_DATA_HOME/puz`, else `~/.local/share/puz` (`%LOCALAPPDATA%\puz` on Windows).
 
 ## Puzzle files
 
@@ -346,6 +382,8 @@ The Swords code is the `swords-client` library in `crates/swords`.
 ## Source layout
 
 - `crates/puz-core`: the library. The puzzle file model and everything that works on one puzzle file: edits, scenes, `.jpz` and `.puz`, export, stats, PNG and PDF, the profile and the built-in guides.
+- `crates/puz-fill`: the fill engine library: word lists, checks, fill, autofill, black-square patterns and word quality. No disk or network, so it also builds for WebAssembly. It has no word list built in (the `bundled-wordlist` feature builds in a file named by `PUZ_FILL_WORDLIST` at build time). Its tests that need a list skip unless `PUZ_FILL_WORDLIST` names one.
+- `vendor/ingrid_core`: the search under the fill engine, [ingrid_core](https://github.com/rf-/ingrid_core) by Ryan Fitzgerald (MIT), without its built-in word list.
 - `crates/puz`: the `puz` command. It parses input, calls `puz-core` and prints the result.
 - `crates/swords` (package `swords-client`): the Swords library: the site calls, the keys, sign-in and setup.
 

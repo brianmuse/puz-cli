@@ -1,13 +1,15 @@
-# One workspace, three packages:
+# One workspace, four packages (and vendor/ingrid_core, the fill search, a plain path dependency):
 #   crates/puz-core  the puzzle file model and everything that edits one file (library)
 #   crates/puz       the `puz` command (package puz-cli): works on one puzzle file
+#   crates/puz-fill  the fill engine (library): word lists, checks, fill, autofill, patterns
 #   crates/swords    the Swords client (package swords-client): publish to a Swords solving site (library)
 [workspace]
 resolver = "3"
-members = ["crates/puz-core", "crates/puz", "crates/swords"]
+members = ["crates/puz-core", "crates/puz-fill", "crates/puz", "crates/swords"]
+exclude = ["vendor"]
 
 [workspace.package]
-version = "0.12.1"
+version = "0.13.0"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT OR Apache-2.0"

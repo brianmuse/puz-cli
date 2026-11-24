@@ -32,8 +32,8 @@ pub struct Stats {
     pub parts: usize,
     /// The size (in squares) of each part, largest first.
     pub part_sizes: Vec<usize>,
-    /// The symmetries the black squares and walls have: "rotational", "mirror" (left/right),
-    /// "mirror-up-down". Empty means none.
+    /// The symmetries the black squares and walls have: "rotational", "rotational-90", "mirror"
+    /// (left/right), "mirror-up-down", "diagonal", "anti-diagonal". Empty means none.
     pub symmetry_found: Vec<String>,
     /// The puzzle's `symmetry` setting.
     pub symmetry_setting: String,
@@ -166,14 +166,10 @@ pub fn symmetries(p: &Puzzle) -> Vec<String> {
             })
     };
     let mut out = vec![];
-    if holds(&|x, y| (w - 1 - x, h - 1 - y)) {
-        out.push("rotational".to_string());
-    }
-    if holds(&|x, y| (w - 1 - x, y)) {
-        out.push("mirror".to_string());
-    }
-    if holds(&|x, y| (x, h - 1 - y)) {
-        out.push("mirror-up-down".to_string());
+    for name in ["rotational", "rotational-90", "mirror", "mirror-up-down", "diagonal", "anti-diagonal"] {
+        if crate::blocks::image(name, w, h, 0, 0).is_some() && holds(&|x, y| crate::blocks::image(name, w, h, x, y).unwrap()) {
+            out.push(name.to_string());
+        }
     }
     out
 }
@@ -668,7 +664,7 @@ mod tests {
 
     #[test]
     fn symmetry_none_and_mismatch() {
-        let p = grid(&["#....", ".....", ".....", ".....", "....."], "rotational");
+        let p = grid(&[".#...", ".....", ".....", ".....", "....."], "rotational");
         let s = stats(&p);
         assert!(s.symmetry_found.is_empty());
         assert!(!s.symmetry_matches);

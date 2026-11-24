@@ -323,20 +323,21 @@ fn paste_unguarded(p: &mut Puzzle, x: usize, y: usize, text: &str) -> Result<usi
             if cx >= p.width() || cy >= p.height() || matches!(c, ' ' | '_' | '?') {
                 continue;
             }
-            let mirror = crate::blocks::partner(p, cx, cy).filter(|&q| q != (cx, cy));
+            let mirror = crate::blocks::orbit(p, cx, cy);
             match c {
                 '#' => {
                     set_cell(p, cx, cy, '#');
-                    if let Some((mx, my)) = mirror {
+                    for &(mx, my) in &mirror {
                         set_cell(p, mx, my, '#');
                     }
                 }
                 '.' | 'a'..='z' | 'A'..='Z' => {
-                    if p.cell(cx, cy) == '#'
-                        && let Some((mx, my)) = mirror
-                        && p.cell(mx, my) == '#'
-                    {
-                        set_cell(p, mx, my, '.');
+                    if p.cell(cx, cy) == '#' {
+                        for &(mx, my) in &mirror {
+                            if p.cell(mx, my) == '#' {
+                                set_cell(p, mx, my, '.');
+                            }
+                        }
                     }
                     set_cell(p, cx, cy, if c == '.' { '.' } else { c.to_ascii_uppercase() });
                 }

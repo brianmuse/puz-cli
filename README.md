@@ -54,6 +54,7 @@ H E L L O
 ```
 
 - **One puzzle, one file.** A puzzle is a plain JSON file. Every command reads or changes one file. No account, no server.
+- **Fill a grid.** `puz autofill` fills a grid with good words, and `puz check` says whether it can be filled. The word list downloads once, from its own site.
 - **Every common format.** Import Across Lite `.puz`. Export `.puz`, `.jpz`, a PNG, a printable PDF, or a newspaper submission PDF.
 - **Publish in one command.** `puz publish` puts a finished puzzle on [swords.cx](https://swords.cx) and prints a link to solve it in the browser, on any device.
 - **Built for scripts and AI agents.** Commands that report results take `--json`.
@@ -101,11 +102,13 @@ puz stats my-puzzle.json                # grid stats and a paper's rules
 puz export my-puzzle.json --format pdf  # also puz, jpz, png, json
 puz import puzzle.puz                   # a .puz to a puzzle file
 puz publish my-puzzle.json              # put it on swords.cx and print the link
+puz autofill my-puzzle.json --write     # fill the rest of the grid
+puz check my-puzzle.json                # can the grid still be filled?
 puz export my-puzzle.json --format nyt  # a NYT submission PDF
 puz swords list                         # what you published, with solve stats
 ```
 
-Run `puz --help` for every command. The [full guide](crates/puz/README.md) covers the file format, marks (rebus, circles, colors, walls), endings, stats, export and publishing.
+Run `puz --help` for every command. The [full guide](crates/puz/README.md) covers the fill commands, the word list, the file format, marks (rebus, circles, colors, walls), endings, stats, export and publishing.
 
 ## Publishing on swords.cx
 
@@ -131,13 +134,16 @@ cargo build --release
 
 Run the tests with `cargo test --release`.
 
-This is one Cargo workspace with three packages:
+This is one Cargo workspace with four packages:
 
 | Folder | Package | What it is |
 |---|---|---|
 | `crates/puz` | `puz-cli` | The `puz` command. |
 | `crates/puz-core` | `puz-core` | A library: the puzzle file model and everything that works on one file. |
+| `crates/puz-fill` | `puz-fill` | A library: the fill engine (checks, fill, autofill, black-square patterns). It also builds for WebAssembly. |
 | `crates/swords` | `swords-client` | A library: publish to swords.cx and manage what you published. |
+
+`vendor/ingrid_core` is a copy of [ingrid_core](https://github.com/rf-/ingrid_core)'s fill search (MIT), with no word list in it. The fill commands download [Spread the Wordlist](https://www.spreadthewordlist.com) (CC BY-NC-SA 4.0) on first use; it is not part of this repo.
 
 ## License
 

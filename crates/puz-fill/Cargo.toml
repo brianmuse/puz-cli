@@ -1,0 +1,28 @@
+[package]
+name = "puz-fill"
+description = "The crossword fill engine for puz: word lists, grid checks, fill, autofill, black-square patterns and word quality. No disk or network, so it also builds for WebAssembly."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+# The search itself: ingrid_core by Ryan Fitzgerald (MIT), vendored in vendor/ingrid_core without
+# its built-in word list.
+ingrid_core = { version = "2.0.0", path = "../../vendor/ingrid_core" }
+# Instant that works in a browser too (std's Instant panics on wasm32-unknown-unknown).
+instant = { version = "0.1.12", features = ["wasm-bindgen"] }
+# The puzzle file model. The `swords` feature (publishing, network) stays off here.
+puz-core = { path = "../puz-core", default-features = false, features = ["pdf"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+default = []
+# Build a word list into the program. The file is not in this repo: set PUZ_FILL_WORDLIST to its
+# path at build time. Without this feature, load a list at run time with
+# `engine::set_default_wordlist` (`puz wordlist install` downloads Spread the Wordlist).
+bundled-wordlist = []

@@ -111,7 +111,8 @@ pub enum Command {
     /// it gets a new key, and you lose it
     #[command(after_help = "Example:\n  puz swords transfer puzzle.json sam@example.com\n  puz swords transfer puzzle.json --cancel\n  puz swords transfer puzzle.json              # the pending transfer, if any\n\nThe link works once, for 7 days. A new transfer replaces the pending one.")]
     Transfer {
-        /// The file you published, the puzzle's id, or its link
+        /// The file you published, the puzzle's id, or its link. A file from your Swords library that is not
+        /// published goes too, when you are signed in
         puzzle: String,
         /// The new owner's email
         #[arg(conflicts_with = "cancel")]

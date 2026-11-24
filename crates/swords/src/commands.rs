@@ -688,11 +688,24 @@ fn details(ctx: &Ctx, state: &State, name: &str, title: Option<String>, notes: O
 }
 
 fn transfer(ctx: &Ctx, state: &State, name: &str, email: Option<&str>, cancel: bool) -> Result<()> {
-    let p = &state.puzzles[find(state, ctx, name)?];
-    let url = format!("{}/api/puzzles/{}/transfer", p.site, p.id);
-    let auth = proof(state, &p.site, p.key.as_str());
+    // A published puzzle goes by its record and key. A file never published goes by the link id that the site's
+    // library gave it (`swords_id`), as the signed-in account.
+    let (url, auth, title) = match find(state, ctx, name) {
+        Ok(i) => {
+            let p = &state.puzzles[i];
+            (format!("{}/api/puzzles/{}/transfer", p.site, p.id), proof(state, &p.site, p.key.as_str()), p.title.clone())
+        }
+        Err(not_published) => {
+            let Some((id, title)) = unshared_id(&ctx.path(name)) else { return Err(not_published) };
+            let Some(session) = state.session(&ctx.site) else {
+                bail!("{name} is not published, so you give it away as its owner on {}. Sign in first: puz swords login", ctx.site)
+            };
+            let auth = Proof { key: None, session: Some(session.token.as_str()), author: None };
+            (format!("{}/api/puzzles/{id}/transfer", ctx.site), auth, title)
+        }
+    };
     let pen = ctx.pen();
-    let title = pen.title(&p.title);
+    let title = pen.title(&title);
     let live = if cancel {
         api::call(Method::Delete, &url, auth, Body::None)?
     } else if let Some(e) = email {
@@ -715,6 +728,17 @@ fn transfer(ctx: &Ctx, state: &State, name: &str, email: Option<&str>, cancel: b
     };
     ctx.out(&live, &pen.ok(&text));
     Ok(())
+}
+
+/// The link id and title in a puzzle file from a Swords library (`swords_id`), or None.
+fn unshared_id(path: &str) -> Option<(String, String)> {
+    let body: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let id = body.get("swords_id")?.as_str()?.to_string();
+    if id.len() != 8 || !id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) {
+        return None;
+    }
+    let title = body.get("title").and_then(|t| t.as_str()).unwrap_or("").trim().to_string();
+    Some((id, if title.is_empty() { "Untitled".into() } else { title }))
 }
 
 fn open(ctx: &Ctx, state: &State, name: &str) -> Result<()> {
@@ -870,6 +894,20 @@ fn site(ctx: &Ctx, state: &mut State, url: Option<&str>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unshared_id_reads_a_library_file() {
+        let dir = std::env::temp_dir().join(format!("swords-unshared-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("a.json");
+        std::fs::write(&f, r#"{"title":" Gift ","swords_id":"abcd2345"}"#).unwrap();
+        assert_eq!(super::unshared_id(f.to_str().unwrap()), Some(("abcd2345".into(), "Gift".into())));
+        std::fs::write(&f, r#"{"swords_id":"../x"}"#).unwrap();
+        assert_eq!(super::unshared_id(f.to_str().unwrap()), None);
+        std::fs::write(&f, r#"{"title":"No id"}"#).unwrap();
+        assert_eq!(super::unshared_id(f.to_str().unwrap()), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     use super::*;
 
     const SITE: &str = "http://localhost:4747";

@@ -4,14 +4,48 @@ use crate::puzzle::Puzzle;
 use anyhow::{bail, Result};
 use std::collections::{HashSet, VecDeque};
 
-/// The square that mirrors (x, y) under the puzzle's symmetry, if any.
-pub fn partner(p: &Puzzle, x: usize, y: usize) -> Option<(usize, usize)> {
-    let (w, h) = (p.width(), p.height());
-    match p.symmetry.as_str() {
+/// Symmetry names a puzzle file can hold. "rotational" is 180 degrees; "left-right" is an old
+/// name for "mirror". 90-degree and diagonal symmetry need a square grid.
+pub const SYMMETRIES: &[&str] = &["rotational", "rotational-90", "mirror", "mirror-up-down", "diagonal", "anti-diagonal", "none"];
+
+/// One step of the symmetry: the square that (x, y) maps to. None for no symmetry, or for a
+/// square-only symmetry on a grid that is not square.
+pub fn image(symmetry: &str, w: usize, h: usize, x: usize, y: usize) -> Option<(usize, usize)> {
+    let sq = w == h;
+    match symmetry {
         "rotational" => Some((w - 1 - x, h - 1 - y)),
         "mirror" | "left-right" => Some((w - 1 - x, y)),
+        "mirror-up-down" => Some((x, h - 1 - y)),
+        "rotational-90" if sq => Some((w - 1 - y, x)),
+        "diagonal" if sq => Some((y, x)),
+        "anti-diagonal" if sq => Some((w - 1 - y, h - 1 - x)),
         _ => None,
     }
+}
+
+/// The other squares that mirror (x, y) under the symmetry: one for most symmetries, up to
+/// three for 90-degree rotation, none on the axis or with no symmetry.
+pub fn orbit_of(symmetry: &str, w: usize, h: usize, x: usize, y: usize) -> Vec<(usize, usize)> {
+    let mut out = vec![];
+    let mut q = (x, y);
+    while let Some(n) = image(symmetry, w, h, q.0, q.1) {
+        if n == (x, y) || out.contains(&n) {
+            break;
+        }
+        out.push(n);
+        q = n;
+    }
+    out
+}
+
+/// `orbit_of` for a puzzle's own symmetry.
+pub fn orbit(p: &Puzzle, x: usize, y: usize) -> Vec<(usize, usize)> {
+    orbit_of(&p.symmetry, p.width(), p.height(), x, y)
+}
+
+/// The square that mirrors (x, y) under the puzzle's symmetry, if any (the first of `orbit`).
+pub fn partner(p: &Puzzle, x: usize, y: usize) -> Option<(usize, usize)> {
+    image(&p.symmetry, p.width(), p.height(), x, y)
 }
 
 /// Set or clear a black square (and its symmetric partner). Letters in the way are an error.
@@ -20,11 +54,7 @@ pub fn set_block(p: &Puzzle, x: usize, y: usize, block: bool) -> Result<Puzzle> 
         bail!("square {x},{y} is outside the grid");
     }
     let mut cells: Vec<(usize, usize)> = vec![(x, y)];
-    if let Some(q) = partner(p, x, y)
-        && q != (x, y)
-    {
-        cells.push(q);
-    }
+    cells.extend(orbit(p, x, y));
     let mut g: Vec<Vec<char>> = p.grid.iter().map(|r| r.chars().collect()).collect();
     for &(cx, cy) in &cells {
         let c = g[cy][cx];

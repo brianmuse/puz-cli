@@ -145,6 +145,8 @@ pub fn payload(p: &Puzzle, author: &str) -> Result<Vec<u8>> {
     c.finished = false;
     c.published = None;
     c.target = None;
+    // The puzzle's link id in a swords.cx account. It names the puzzle; it is not part of what is shared.
+    c.extra.remove("swords_id");
     crate::pictures::send_bytes(&c)
 }
 
@@ -418,6 +420,11 @@ pub fn send(file: &Path, env: &Env, o: &PushOptions) -> Result<Sent> {
         _ => None,
     };
     let old = remembered.filter(|_| !o.new).or(adopted.clone());
+    // A puzzle from a swords.cx account has its link from the start (`swords_id`): publishing it turns that link on.
+    let own = match (&src, &old, o.new) {
+        (Source::Puz(p), None, false) => p.extra.get("swords_id").and_then(Value::as_str).filter(|id| id.len() == 8 && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())).map(str::to_string),
+        _ => None,
+    };
 
     let author = Some(o.author.trim()).filter(|a| !a.is_empty());
     let req = share::Push {
@@ -434,7 +441,16 @@ pub fn send(file: &Path, env: &Env, o: &PushOptions) -> Result<Sent> {
         author,
     };
     let key_here = old.as_ref().is_some_and(|l| share::key(&st, &site, &l.id).is_some());
-    let (pushed, pin_failed) = match share::push(&mut st, &env.state_file, &req) {
+    let tried = match &own {
+        Some(id) => match share::push(&mut st, &env.state_file, &share::Push { update: Some(id), ..req }) {
+            // Not this account's id on this site (another site, or not signed in): publish under a new link.
+            Err(e) if matches!(e.status(), Some(401 | 403 | 404)) => None,
+            r => Some(r),
+        },
+        None => None,
+    };
+    let from_own = tried.is_some();
+    let (pushed, pin_failed) = match tried.unwrap_or_else(|| share::push(&mut st, &env.state_file, &req)) {
         Ok(pushed) => (pushed, None),
         // The publish itself worked: the link is remembered below, then the PIN error is given.
         Err(share::Error::PinNotSet { pushed, cause }) => (*pushed, Some(share::Error::Site(cause))),
@@ -444,7 +460,7 @@ pub fn send(file: &Path, env: &Env, o: &PushOptions) -> Result<Sent> {
             _ => bail!("{}", site_words(&e)),
         },
     };
-    let created = pushed.outcome == share::Outcome::Created;
+    let created = pushed.outcome == share::Outcome::Created || from_own;
     let mut link = match old {
         Some(link) => link,
         None => Link { site: site.clone(), id: pushed.id.clone(), first_pushed: now.clone(), ..Link::default() },

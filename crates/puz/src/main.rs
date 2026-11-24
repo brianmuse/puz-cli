@@ -1,5 +1,7 @@
+mod fill;
 mod swords;
 mod update;
+mod wordlist;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
@@ -15,8 +17,11 @@ use std::path::{Path, PathBuf};
 ///
 /// A puzzle is one JSON file in ipuz, the open crossword standard (http://ipuz.org), with an
 /// extension for what ipuz can't hold. Older puz JSON files still read, and change to ipuz on their
-/// next save. Every command reads or changes one file and needs nothing else:
-/// no account, no word list, no server. PUZZLE is a file path (my-puzzle.json).
+/// next save. Every command reads or changes one file and needs nothing else: no account, no
+/// server. PUZZLE is a file path (my-puzzle.json).
+///
+/// The fill commands (fill, autofill, check, status, candidates, pattern, ...) also need a word
+/// list. puz has none built in: `puz wordlist install` downloads Spread the Word(list).
 ///
 /// If you keep your puzzles in one folder, name it with --library or $PUZ_LIBRARY. PUZZLE may
 /// then also be a name inside that folder: "my-puzzle" or "drafts/my-puzzle.json".
@@ -47,7 +52,7 @@ enum Cmd {
         /// Width x height
         #[arg(long, default_value = "15x15")]
         size: String,
-        /// rotational, mirror, or none
+        /// rotational, rotational-90, mirror, mirror-up-down, diagonal, anti-diagonal, or none
         #[arg(long, default_value = "rotational")]
         symmetry: String,
         /// A folder to put it in (inside the folder of puzzles, when one is set)
@@ -82,7 +87,7 @@ enum Cmd {
         /// kept, up to 1,000 characters. "-" reads stdin; "" removes it.
         #[arg(long)]
         notes: Option<String>,
-        /// rotational, mirror, or none
+        /// rotational, rotational-90, mirror, mirror-up-down, diagonal, anti-diagonal, or none
         #[arg(long)]
         symmetry: Option<String>,
         /// The paper whose rules `stats` checks: nyt-daily, nyt-sunday, nyt-mini, lat-daily,
@@ -531,6 +536,14 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// The word list for the fill commands: install (download Spread the Word(list)), update,
+    /// status, remove, or use a file of your own
+    Wordlist {
+        #[command(subcommand)]
+        cmd: wordlist::Cmd,
+    },
+    #[command(flatten)]
+    Fill(fill::Cmd),
     /// Print a how-to guide about the puzzle file. `guide` lists them; `guide ending` says how to
     /// write an ending and its scene.
     Guide {
@@ -884,9 +897,9 @@ fn run(cli: Cli) -> Result<i32> {
                 p.target = stats::parse_target(&t)?;
             }
             if let Some(s) = &symmetry
-                && !["rotational", "mirror", "none"].contains(&s.as_str())
+                && !puz_core::blocks::SYMMETRIES.contains(&s.as_str())
             {
-                bail!("symmetry must be rotational, mirror, or none");
+                bail!("symmetry must be one of: {}", puz_core::blocks::SYMMETRIES.join(", "));
             }
             for (field, v) in [(&mut p.title, title), (&mut p.author, author), (&mut p.copyright, copyright), (&mut p.symmetry, symmetry)] {
                 if let Some(v) = v {
@@ -1142,7 +1155,14 @@ fn run(cli: Cli) -> Result<i32> {
             return Ok(code);
         }
         Cmd::Setup { name, email, site, json } => return Ok(swords::setup_command(name, email, site, json)),
-        Cmd::Update { json } => update::update(json)?,
+        Cmd::Update { json } => {
+            update::update(json)?;
+            if !json {
+                wordlist::offer();
+            }
+        }
+        Cmd::Wordlist { cmd } => wordlist::run(cmd)?,
+        Cmd::Fill(cmd) => fill::run(cmd, &ctx)?,
         Cmd::Stats { puzzle, rules, json } => {
             let (p, _) = ctx.load(&puzzle)?;
             let r = stats::report(&p, &rules)?;
