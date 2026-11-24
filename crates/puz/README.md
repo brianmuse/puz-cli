@@ -146,7 +146,7 @@ The fill commands work on one puzzle file. They need a word list (see below); `c
 
 ### The word list
 
-puz has no word list built in. The fill commands use [Spread the Word(list)](https://www.spreadthewordlist.com), downloaded straight from its site (about 4 MB). It is licensed [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): free for non-commercial use, with credit.
+puz has no word list built in. The fill commands use [Spread the Word(list)](https://www.spreadthewordlist.com) by Brooke Husic and Enrique Henestroza Anguiano, downloaded straight from its site (about 4 MB). It is licensed [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): free for non-commercial use, with credit.
 
 - The install script asks: "Install the Spread the Wordlist word list (about 4 MB download, CC BY-NC-SA)? [Y/n]". So does `puz update` when no list is installed. Each asks only at a terminal; otherwise it says how to install the list later.
 - A fill command that finds no list asks the same question at a terminal. If you say no, or there is no terminal, it stops with: "This needs a word list. Run `puz wordlist install`." Add `--yes` (`-y`) to download without asking.

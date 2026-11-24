@@ -143,7 +143,7 @@ This is one Cargo workspace with four packages:
 | `crates/puz-fill` | `puz-fill` | A library: the fill engine (checks, fill, autofill, black-square patterns). It also builds for WebAssembly. |
 | `crates/swords` | `swords-client` | A library: publish to swords.cx and manage what you published. |
 
-`vendor/ingrid_core` is a copy of [ingrid_core](https://github.com/rf-/ingrid_core)'s fill search (MIT), with no word list in it. The fill commands download [Spread the Wordlist](https://www.spreadthewordlist.com) (CC BY-NC-SA 4.0) on first use; it is not part of this repo.
+`vendor/ingrid_core` is a copy of [ingrid_core](https://github.com/rf-/ingrid_core)'s fill search (MIT), with no word list in it. The fill commands download [Spread the Wordlist](https://www.spreadthewordlist.com) by Brooke Husic and Enrique Henestroza Anguiano ([CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)) on first use; it is not part of this repo.
 
 ## How to release
 
