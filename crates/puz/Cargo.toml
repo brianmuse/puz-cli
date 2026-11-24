@@ -28,4 +28,6 @@ serde_json.workspace = true
 puz-fill = { version = "0.13.0", path = "../puz-fill" }
 # Downloads the word list (`puz wordlist install`).
 ureq = { version = "3", default-features = false, features = ["rustls"] }
+# SHA-256 for `puz update` (already in the build through rustls).
+ring = { version = "0.17", default-features = false }
 swords-client = { version = "0.5.0", path = "../swords" }

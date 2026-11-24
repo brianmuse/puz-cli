@@ -2,7 +2,8 @@
 //! daily check that says when a newer puz is out.
 //!
 //! The site serves the builds at `/cli/puz-<os>-<arch>` (`puz-windows-x64.exe` for Windows) and the
-//! newest version number at `/cli/version`.
+//! newest version number at `/cli/version`, and `/cli/SHA256SUMS` when it has one (swords.cx sends
+//! all three from the newest GitHub Release).
 
 use anyhow::{Context as _, Result, bail};
 use std::ffi::{OsStr, OsString};
@@ -163,9 +164,30 @@ pub fn update(json: bool) -> Result<()> {
     if !is_program(&build) {
         bail!("{site} did not send a puz program.");
     }
+    // Check the build against the release's SHA256SUMS. A site with no such file skips the check.
+    if let Ok(reply) = api::send(Method::Get, &format!("{site}/cli/SHA256SUMS"), Proof::default(), Body::None)
+        && reply.ok()
+        && let Some(want) = sum_for(&String::from_utf8_lossy(&reply.body), &name)
+        && want != sha256_hex(&build)
+    {
+        bail!("The puz build from {site} does not match its SHA256SUMS. Nothing was changed. Try again later.");
+    }
     replace(&me, &build, &|f| runs(f, &newest))?;
     out(true, format!("Updated puz from {VERSION} to {newest}."));
     Ok(())
+}
+
+/// The SHA-256 (lowercase hex) that a SHA256SUMS file gives for `name`, if it lists it.
+pub fn sum_for(sums: &str, name: &str) -> Option<String> {
+    sums.lines().find_map(|line| {
+        let (hash, file) = line.trim().split_once(char::is_whitespace)?;
+        (file.trim().trim_start_matches('*') == name && hash.len() == 64).then(|| hash.to_ascii_lowercase())
+    })
+}
+
+/// The SHA-256 of `bytes`, as lowercase hex.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    ring::digest::digest(&ring::digest::SHA256, bytes).as_ref().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn swords_agent_run() -> bool {
@@ -324,6 +346,15 @@ mod tests {
         assert_eq!(build_name("windows", "aarch64"), None);
         assert_eq!(build_name("freebsd", "x86_64"), None);
         assert!(build_name(std::env::consts::OS, std::env::consts::ARCH).is_some());
+    }
+
+    #[test]
+    fn sums() {
+        let a = "a".repeat(64);
+        let text = format!("{a}  puz-macos-arm64\n{}  puz-linux-x64\n", "b".repeat(64));
+        assert_eq!(sum_for(&text, "puz-macos-arm64"), Some(a));
+        assert_eq!(sum_for(&text, "puz-windows-x64.exe"), None);
+        assert_eq!(sha256_hex(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
     #[test]

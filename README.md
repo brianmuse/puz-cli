@@ -145,6 +145,15 @@ This is one Cargo workspace with four packages:
 
 `vendor/ingrid_core` is a copy of [ingrid_core](https://github.com/rf-/ingrid_core)'s fill search (MIT), with no word list in it. The fill commands download [Spread the Wordlist](https://www.spreadthewordlist.com) (CC BY-NC-SA 4.0) on first use; it is not part of this repo.
 
+## How to release
+
+A tag starts the release. GitHub Actions (`.github/workflows/release.yml`) builds the five programs, writes `SHA256SUMS`, and makes the GitHub Release. swords.cx serves the newest release within 5 minutes, so the site needs no deploy.
+
+1. Set the new version in `Cargo.toml` (`[workspace.package] version`, and the matching `puz-core` and `puz-fill` versions in `crates/puz/Cargo.toml`). Run `cargo build --release` to update `Cargo.lock`.
+2. Commit: `git commit -am "puz X.Y.Z"`.
+3. Tag: `git tag vX.Y.Z`. The tag must match the version, or the workflow stops.
+4. Push both: `git push origin main vX.Y.Z`.
+
 ## License
 
 Licensed under either of

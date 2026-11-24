@@ -1,0 +1,113 @@
+# Make a GitHub Release when a version tag (like v0.13.0) is pushed.
+# It builds the five puz programs that https://swords.cx/install.sh, install.ps1 and `puz update`
+# download, with https://swords.cx as the built-in site, and attaches them with a SHA256SUMS file.
+# The builds match swords.cx/scripts/build-for-swords.sh: SWORDS_DEFAULT_SITE set, default features,
+# static musl for Linux, and cargo-zigbuild for Linux and Windows.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  SWORDS_DEFAULT_SITE: https://swords.cx
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: The tag matches the workspace version
+        run: |
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)
+          echo "Tag: $GITHUB_REF_NAME  Cargo.toml: $version"
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $version in Cargo.toml."
+            exit 1
+          fi
+
+  build-macos:
+    needs: check-version
+    runs-on: macos-14
+    strategy:
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, name: puz-macos-arm64 }
+          - { target: x86_64-apple-darwin, name: puz-macos-x64 }
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --locked -p puz-cli --target ${{ matrix.target }}
+      - name: Name the file
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/puz dist/${{ matrix.name }}
+          chmod 755 dist/${{ matrix.name }}
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}
+          if-no-files-found: error
+
+  build-zig:
+    needs: check-version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, name: puz-linux-x64, bin: puz }
+          - { target: aarch64-unknown-linux-musl, name: puz-linux-arm64, bin: puz }
+          - { target: x86_64-pc-windows-gnu, name: puz-windows-x64.exe, bin: puz.exe }
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: mlugg/setup-zig@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Build
+        run: cargo zigbuild --release --locked -p puz-cli --target ${{ matrix.target }}
+      - name: Name the file
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.bin }} dist/${{ matrix.name }}
+          chmod 755 dist/${{ matrix.name }}
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}
+          if-no-files-found: error
+
+  release:
+    needs: [build-macos, build-zig]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: |
+          sha256sum puz-macos-arm64 puz-macos-x64 puz-linux-x64 puz-linux-arm64 puz-windows-x64.exe > SHA256SUMS
+          cat SHA256SUMS
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "puz ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            --verify-tag

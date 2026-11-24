@@ -789,6 +789,7 @@ dependencies = [
  "clap",
  "puz-core",
  "puz-fill",
+ "ring",
  "serde",
  "serde_json",
  "swords-client",
