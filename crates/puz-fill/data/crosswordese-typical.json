@@ -1,0 +1,58 @@
+{
+  "source": "published puzzles in the puzzle history (xwh/scripts/crosswordese_benchmark.py)",
+  "from": "2021-11-26",
+  "to": "2026-11-25",
+  "puzzles": 1826,
+  "sizes": {
+    "15x15": {
+      "puzzles": 1407,
+      "p25": 9.0,
+      "median": 12.0,
+      "p75": 16.0
+    },
+    "21x21": {
+      "puzzles": 228,
+      "p25": 17.0,
+      "median": 20.0,
+      "p75": 23.0
+    }
+  },
+  "weekdays15": {
+    "Monday": {
+      "puzzles": 245,
+      "p25": 13.0,
+      "median": 16.0,
+      "p75": 19.0
+    },
+    "Tuesday": {
+      "puzzles": 219,
+      "p25": 12.0,
+      "median": 14.0,
+      "p75": 16.5
+    },
+    "Wednesday": {
+      "puzzles": 215,
+      "p25": 12.0,
+      "median": 14.0,
+      "p75": 16.0
+    },
+    "Thursday": {
+      "puzzles": 221,
+      "p25": 11.0,
+      "median": 13.0,
+      "p75": 16.0
+    },
+    "Friday": {
+      "puzzles": 256,
+      "p25": 7.0,
+      "median": 9.0,
+      "p75": 12.0
+    },
+    "Saturday": {
+      "puzzles": 251,
+      "p25": 6.0,
+      "median": 8.0,
+      "p75": 10.0
+    }
+  }
+}

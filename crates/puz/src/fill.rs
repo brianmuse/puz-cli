@@ -544,6 +544,9 @@ pub fn run(cmd: Cmd, ctx: &Ctx) -> Result<()> {
             } else {
                 let words: Vec<String> = r.entries.iter().map(|e| e.answer.clone()).collect();
                 println!("{} crosswordese answers (warn over {}): {}", r.count, r.threshold, if words.is_empty() { "none".into() } else { words.join(", ") });
+                if let Some(b) = r.typical {
+                    println!("Typical published range for {}x{}: {}\u{2013}{} (median {}, {} puzzles)", b.width, b.height, b.p25, b.p75, b.median, b.puzzles);
+                }
                 if r.over {
                     println!("More than usual. Try fresher words in a few of them.");
                 }
