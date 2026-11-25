@@ -10,7 +10,9 @@
 //!    Score 0 means "avoid" for other reasons (names, crude words), not green paint, so it is skipped.
 //! 3. It is not a form of a listed word (stem + S, ED, ING, ER, LY, NESS and so on).
 //! 4. It splits into 2 or 3 common words: each at least 3 letters with a list score of 50+, or a
-//!    short glue word (A, AN, TO, OF, ...). The last word is not glue.
+//!    short glue word (A, AN, TO, OF, ...). The last word is not glue. Not counting A, AN or THE, it is
+//!    exactly 2 words: green paint is a pair (GREEN PAINT, EAT A PEAR); a longer phrase (GOD IS
+//!    NOWHERE) is not.
 //! 5. The user has not liked it, and (app only, with a puzzle history) no published puzzle ran it.
 //!
 //! Nothing else in the web app mirrors this rule: the page reads `green_paint` from /api/stats.
@@ -64,7 +66,7 @@ pub fn split(w: &str) -> Option<Vec<String>> {
             best[j] = Some(v);
         }
     }
-    best[n].take().filter(|v| v.len() >= 2 && !GLUE.contains(&v[v.len() - 1].as_str()))
+    best[n].take().filter(|v| v.len() >= 2 && !GLUE.contains(&v[v.len() - 1].as_str()) && v.iter().filter(|p| !["A", "AN", "THE"].contains(&p.as_str())).count() == 2)
 }
 
 /// The words of a possible green-paint answer (any case; anything but letters ignored), or None.
@@ -135,6 +137,8 @@ mod tests {
         for w in ["REDCARPET", "SPILLTHEBEANS", "ICEDTEA", "HOTDOG", "OPENSESAME", "SEXTING", "HEADLAMPS", "ZEBRAS", "BIGDOG", "ERA"] {
             assert!(!is_green_paint(w), "{w}");
         }
+        // Three content words is a made-up phrase, not green paint.
+        assert!(!is_green_paint("GODISNOWHERE"));
         assert_eq!(green_paint_words("EATAPEAR").unwrap(), ["EAT", "A", "PEAR"]);
     }
 }
