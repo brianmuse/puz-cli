@@ -93,6 +93,26 @@ pub fn to_ipuz(p: &Puzzle) -> Result<Value> {
             continue;
         }
         let list = if s.dir == Dir::Across { &mut across } else { &mut down };
+        let refs: Vec<Value> = p
+            .linked_slots(s)
+            .iter()
+            .map(|t| json!({ "number": t.number, "direction": if t.dir == Dir::Across { "Across" } else { "Down" } }))
+            .collect();
+        if !refs.is_empty() {
+            let mut o = Map::new();
+            o.insert("number".into(), json!(s.number));
+            o.insert("clue".into(), json!(text.unwrap_or("")));
+            o.insert("references".into(), Value::Array(refs));
+            if let Some((k, pic)) = picture {
+                shown_pictures.insert(k.clone());
+                o.insert("image".into(), json!(pic.image));
+                if !pic.alt.is_empty() {
+                    o.insert(ALT.into(), json!(pic.alt));
+                }
+            }
+            list.push(Value::Object(o));
+            continue;
+        }
         match picture {
             Some((k, pic)) => {
                 shown_pictures.insert(k.clone());
@@ -289,6 +309,9 @@ pub fn from_ipuz(v: &Value) -> Result<Puzzle> {
         };
         p.pictures.entry(key).or_insert(pic);
     }
+    if p.links.is_empty() {
+        p.links = numbered_links(&p, v.get("clues"));
+    }
     Ok(p)
 }
 
@@ -304,6 +327,37 @@ fn numbered_clues(p: &Puzzle, clues: Option<&Value>) -> BTreeMap<String, String>
         };
         if let Some(t) = text.filter(|t| !t.trim().is_empty()) {
             out.insert(s.key.clone(), t.to_string());
+        }
+    });
+    out
+}
+
+/// The standard `references` on clue objects, as links keyed by the source's clue key. Each
+/// reference is `{"number", "direction"}` (a bare number means the other direction is unknown, so
+/// it is skipped unless only one slot has that number).
+fn numbered_links(p: &Puzzle, clues: Option<&Value>) -> BTreeMap<String, Vec<crate::puzzle::ClueLink>> {
+    let mut out: BTreeMap<String, Vec<crate::puzzle::ClueLink>> = BTreeMap::new();
+    let slots = if p.grid.is_empty() || p.grid.iter().any(|r| r.chars().count() != p.width()) { vec![] } else { p.slots() };
+    each_clue(p, clues, |s, clue| {
+        let Some(refs) = clue.get("references").and_then(Value::as_array) else { return };
+        let from = match s.answer() {
+            Some(a) if p.clues.contains_key(&a) => a,
+            _ => s.key.clone(),
+        };
+        let text = p.clues.get(&from).map(String::as_str).unwrap_or("");
+        for r in refs {
+            let n = r.get("number").or(Some(r)).and_then(|n| n.as_u64().map(|n| n as usize).or_else(|| n.as_str().and_then(|s| s.trim().parse().ok())));
+            let dir = r.get("direction").and_then(Value::as_str).map(|d| d.trim().to_lowercase());
+            let Some(n) = n else { continue };
+            let mut hits = slots.iter().filter(|t| t.number == n && dir.as_deref().is_none_or(|d| d.starts_with(if t.dir == Dir::Across { "a" } else { "d" })));
+            let (Some(t), None) = (hits.next(), hits.next()) else { continue };
+            let full = crate::puzzle::ref_label(t);
+            let label = if text.contains(&full) { full } else { String::new() };
+            let to = t.answer().unwrap_or_else(|| t.key.clone());
+            let list = out.entry(from.clone()).or_default();
+            if !list.iter().any(|l| l.to == to) {
+                list.push(crate::puzzle::ClueLink { to, label });
+            }
         }
     });
     out

@@ -108,10 +108,19 @@ enum Cmd {
         all: bool,
     },
     /// Set one clue. An empty string removes it. The clue is stored under the answer, so it follows the word.
+    /// --link 17A links it to another clue (a cross-reference, like "See 17-Across"); the number in the
+    /// text then stays right when the grid renumbers. --unlink removes its links.
     Clue {
         puzzle: String,
         slot: String,
-        text: String,
+        /// The clue text. Leave it out to change only the links.
+        text: Option<String>,
+        /// Link to another clue: 17A, 23-Down or x,y,dir. Repeat for more. Replaces the clue's links.
+        #[arg(long = "link")]
+        link: Vec<String>,
+        /// Remove the clue's links
+        #[arg(long, conflicts_with = "link")]
+        unlink: bool,
         #[arg(long)]
         json: bool,
     },
@@ -927,14 +936,28 @@ fn run(cli: Cli) -> Result<i32> {
             p.save(&f)?;
             println!("{}", c.message());
         }
-        Cmd::Clue { puzzle, slot, text, json } => {
+        Cmd::Clue { puzzle, slot, text, link, unlink, json } => {
             let (mut p, f) = ctx.load(&puzzle)?;
-            let l = edit::set_clue(&mut p, &slot, &text)?;
+            if text.is_none() && link.is_empty() && !unlink {
+                anyhow::bail!("give the clue TEXT, --link SLOT or --unlink");
+            }
+            let l = match &text {
+                Some(t) => edit::set_clue(&mut p, &slot, t)?,
+                None => edit::label(&p.find_slot(&slot)?),
+            };
+            if !link.is_empty() || unlink {
+                puz_core::links::set_links(&mut p, &slot, &link)?;
+            }
             p.save(&f)?;
+            let text = p.find_slot(&slot).ok().and_then(|s| p.clue_for(&s).map(String::from)).unwrap_or_default();
             let s = p.find_slot(&slot)?;
             let problem = s.answer().zip(p.clue_for(&s)).and_then(|(a, c)| edit::clue_problem(&a, c));
+            let refs: Vec<String> = p.linked_slots(&s).iter().map(edit::label).collect();
             if json {
-                println!("{}", serde_json::json!({ "slot": l, "answer": s.answer(), "clue": p.clue_for(&s), "problem": problem }));
+                println!("{}", serde_json::json!({ "slot": l, "answer": s.answer(), "clue": p.clue_for(&s), "problem": problem, "references": refs }));
+            } else if !link.is_empty() || unlink {
+                println!("{l}: {text}");
+                if refs.is_empty() { println!("No links."); } else { println!("Linked to {}", refs.join(", ")); }
             } else if s.answer().is_none() && !text.trim().is_empty() {
                 println!("{l}: {text}\n(The answer has empty squares, so the clue stays on this slot until it is complete. Then it follows the word.)");
             } else {
@@ -997,7 +1020,8 @@ fn run(cli: Cli) -> Result<i32> {
             } else {
                 for c in edit::slot_clues(&p) {
                     let warn = c.problem.as_ref().map(|w| format!("   [warning: {w}]")).unwrap_or_default();
-                    println!("{:>5} {:<16} {}{warn}", c.slot, c.answer.as_deref().unwrap_or("(incomplete)"), c.clue.as_deref().unwrap_or(""));
+                    let refs = if c.references.is_empty() { String::new() } else { format!("   [links: {}]", c.references.join(", ")) };
+                    println!("{:>5} {:<16} {}{refs}{warn}", c.slot, c.answer.as_deref().unwrap_or("(incomplete)"), c.clue.as_deref().unwrap_or(""));
                 }
             }
         }

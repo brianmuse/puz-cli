@@ -122,8 +122,10 @@ pub fn set_clue(p: &mut Puzzle, slot: &str, text: &str) -> Result<String> {
         // Remove what the slot shows: the answer's clue and any slot-keyed clue behind it.
         if let Some(a) = s.answer() {
             p.clues.remove(&a);
+            p.links.remove(&a);
         }
         p.clues.remove(&s.key);
+        p.links.remove(&s.key);
     } else {
         p.clues.insert(p.clue_key(&s), text);
     }
@@ -178,6 +180,9 @@ pub struct SlotClue {
     /// Set when the clue gives the answer away (see `clue_problem`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub problem: Option<String>,
+    /// The slots this clue links to (cross-references), e.g. ["17A"]. In ipuz these are `references`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub references: Vec<String>,
 }
 
 /// Every slot with the clue it shows, in slot order.
@@ -187,7 +192,8 @@ pub fn slot_clues(p: &Puzzle) -> Vec<SlotClue> {
         .map(|s| {
             let (answer, clue) = (s.answer(), p.clue_for(s).map(String::from));
             let problem = answer.as_deref().zip(clue.as_deref()).and_then(|(a, c)| clue_problem(a, c));
-            SlotClue { slot: label(s), answer, clue, problem }
+            let references = p.linked_slots(s).iter().map(label).collect();
+            SlotClue { slot: label(s), answer, clue, problem, references }
         })
         .collect()
 }

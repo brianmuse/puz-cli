@@ -32,6 +32,12 @@ pub struct Puzzle {
     /// the clue, and its description. A picture clue's text may be empty. See `pictures`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub pictures: BTreeMap<String, CluePicture>,
+    /// Linked (cross-referenced) clues, keyed like `clues`: a clue that says "See 17-Across" links
+    /// to that answer. Each link names its target by clue key (answer, else slot key), so it
+    /// follows the word when the grid renumbers; `label` is the number the clue text shows now,
+    /// and `tidy` rewrites it in the text when the target's number changes. See `links`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub links: BTreeMap<String, Vec<ClueLink>>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub finished: bool,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -158,6 +164,21 @@ pub struct Sprite {
     pub alt: Option<String>,
 }
 
+/// A link from one clue to another (see `Puzzle::links`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct ClueLink {
+    /// The target's clue key: its answer ("CAT"), else its slot key ("x,y,down").
+    pub to: String,
+    /// The target's label as the clue text shows it, e.g. "17-Across". Empty if the text has none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+}
+
+/// A slot's label as clue text writes it: "17-Across", "4-Down".
+pub fn ref_label(s: &SlotInfo) -> String {
+    format!("{}-{}", s.number, if s.dir == Dir::Across { "Across" } else { "Down" })
+}
+
 /// A clue's picture: `image` is a `data:image/...;base64,` URL (PNG, JPEG, WebP or GIF).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct CluePicture {
@@ -228,6 +249,7 @@ impl Puzzle {
             grid: vec![".".repeat(width); height],
             clues: BTreeMap::new(),
             pictures: BTreeMap::new(),
+            links: BTreeMap::new(),
             finished: false,
             notes: String::new(),
             rebus: BTreeMap::new(),
@@ -589,6 +611,75 @@ impl Puzzle {
                 Some(_) => {}
             }
         }
+        self.tidy_links();
+    }
+
+    /// Clean up the clue links: move slot-keyed sources and targets to their answers when the
+    /// clue moved there, drop links whose clue is gone, and rewrite each link's number in the clue
+    /// text when the target now has another number ("See 17-Across" becomes "See 19-Across").
+    fn tidy_links(&mut self) {
+        if self.links.is_empty() {
+            return;
+        }
+        let slots = self.slots();
+        let slot_answer = |k: &str| slots.iter().find(|s| s.key == k).and_then(|s| s.answer());
+        let links = std::mem::take(&mut self.links);
+        for (mut from, list) in links {
+            if is_slot_key(&from) && !self.clues.contains_key(&from) {
+                if let Some(a) = slot_answer(&from) {
+                    from = a;
+                }
+            }
+            if !self.clues.contains_key(&from) && !self.pictures.contains_key(&from) {
+                continue;
+            }
+            let entry = self.links.entry(from).or_default();
+            for mut l in list {
+                if is_slot_key(&l.to) && !self.clues.contains_key(&l.to) {
+                    if let Some(a) = slot_answer(&l.to) {
+                        l.to = a;
+                    }
+                }
+                if !l.to.is_empty() && !entry.iter().any(|e| e.to == l.to) {
+                    entry.push(l);
+                }
+            }
+        }
+        self.links.retain(|_, l| !l.is_empty());
+        let keys: Vec<String> = self.links.keys().cloned().collect();
+        for from in keys {
+            let mut list = self.links.remove(&from).unwrap();
+            for l in &mut list {
+                let Some(t) = self.link_target(&l.to) else { continue };
+                let now = ref_label(&t);
+                if l.label.is_empty() || l.label == now {
+                    continue;
+                }
+                if let Some(text) = self.clues.get_mut(&from) {
+                    *text = crate::links::replace_label(text, &l.label, &now);
+                }
+                l.label = now;
+            }
+            self.links.insert(from, list);
+        }
+    }
+
+    /// The slot a link target key names now: the slot whose answer it is, else the slot with
+    /// that key. None when no slot shows it.
+    pub fn link_target(&self, to: &str) -> Option<SlotInfo> {
+        let slots = self.slots();
+        slots.iter().find(|s| s.answer().as_deref() == Some(to)).or_else(|| slots.iter().find(|s| s.key == to)).cloned()
+    }
+
+    /// The links a slot's clue has (stored under the key its clue is under), if any.
+    pub fn links_for(&self, s: &SlotInfo) -> &[ClueLink] {
+        let key = s.answer().filter(|a| self.links.contains_key(a)).unwrap_or_else(|| s.key.clone());
+        self.links.get(&key).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// The slots a slot's clue links to now (targets no slot shows are left out).
+    pub fn linked_slots(&self, s: &SlotInfo) -> Vec<SlotInfo> {
+        self.links_for(s).iter().filter_map(|l| self.link_target(&l.to)).collect()
     }
 
     /// The key a slot's clue is stored under: its answer when complete, else the slot key.
