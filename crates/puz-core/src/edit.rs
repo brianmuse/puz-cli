@@ -197,6 +197,10 @@ pub fn slot_clues(p: &Puzzle) -> Vec<SlotClue> {
 /// cream flavor" for ICECREAM), or as a part of the answer ("Snow figure" for SNOWMAN). Answers of
 /// 3 letters or fewer only count as a whole word, since they sit inside many words by chance.
 /// `web/src/lib/clue-check.ts` mirrors this.
+/// Short words that end many phrase answers (POOR ME, GOT IT, GIVE UP). A clue holding one that ends
+/// the answer counts as giving part of it away. Other short words sit at word ends by chance too often.
+const SHORT_ENDS: [&str; 12] = ["ME", "MY", "YOU", "IT", "US", "UP", "OUT", "OFF", "NOW", "YES", "HIM", "HER"];
+
 pub fn clue_problem(answer: &str, clue: &str) -> Option<String> {
     let letters = |s: &str| s.chars().filter(|c| c.is_ascii_alphabetic()).map(|c| c.to_ascii_uppercase()).collect::<String>();
     let a = letters(answer);
@@ -214,6 +218,10 @@ pub fn clue_problem(answer: &str, clue: &str) -> Option<String> {
             return Some(format!("{a} is inside \"{raw}\""));
         }
         if w.len() >= 4 && a.len() > w.len() && (a.starts_with(w.as_str()) || a.ends_with(w.as_str())) {
+            return Some(format!("\"{raw}\" is part of the answer {a}"));
+        }
+        // Short words that often end a phrase answer ("Woe is me" for POORME, "Got it" for IGETIT).
+        if w.len() <= 3 && a.len() >= w.len() + 3 && SHORT_ENDS.contains(&w.as_str()) && a.ends_with(w.as_str()) {
             return Some(format!("\"{raw}\" is part of the answer {a}"));
         }
     }
@@ -1411,6 +1419,10 @@ mod clue_problem_tests {
         assert_eq!(clue_problem("ATE", "Created a stir"), None);
         assert_eq!(clue_problem("THEATER", "Heat source"), None);
         assert_eq!(clue_problem("A", "A to Z"), None);
+        assert!(clue_problem("POORME", "Woe is me").is_some());
+        assert!(clue_problem("GIVEUP", "Throw in the towel, or up").is_some());
+        assert_eq!(clue_problem("POORME", "Pity-party cry"), None);
+        assert_eq!(clue_problem("MELON", "Fruit on a vine"), None);
     }
 }
 
