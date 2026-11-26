@@ -96,6 +96,12 @@ pub fn pushed_before(state: &State, path: &str, site: &str) -> Option<usize> {
     state.puzzles.iter().rposition(|p| p.file == path && p.site == site)
 }
 
+/// The builder's page for a shared puzzle: its Share tab on the site. A signed-in owner goes here; the claim link
+/// (`manage_link`) is only for a puzzle on no account.
+pub fn builder_link(site: &str, id: &str) -> String {
+    format!("{site}/puzzles/#/open/{id}/share")
+}
+
 fn manage_link(p: &Puzzle) -> String {
     format!("{}/p/{}/manage#{}", p.site, p.id, p.key)
 }
@@ -304,7 +310,12 @@ pub fn pushed_text(pen: &Pen, p: &Json, how: Pushed, tip: bool, puzzles: Option<
             lines.push(pen.ok(&format!("Published {title}. {who} can solve it:")));
             lines.push(pen.link(&p.text("url")));
             match p.get("email").and_then(Json::as_str) {
-                Some(email) => lines.push(pen.note(&format!("It is attached to {email}."))),
+                Some(email) => {
+                    lines.push(pen.note(&format!("It is attached to {email}.")));
+                    if let Some(open) = p.get("open").and_then(Json::as_str) {
+                        lines.push(pen.labelled_link("Edit and share it", open));
+                    }
+                }
                 None if !pen.rich => lines.push("Its key is saved on this computer only. To keep your puzzles on any device: puz swords login EMAIL".to_string()),
                 // One hint, and only to a person: never a question.
                 None if tip => lines.extend([pen.note("Its key is saved on this computer only. Add your name and keep your puzzles:"), pen.cmd("puz setup")]),

@@ -122,7 +122,11 @@ fn publish_inner(o: Publish) -> Result<()> {
         data["puzzles_url"] = serde_json::json!(puzzles);
         // The claim link holds the key, on purpose: it is how the owner gets the puzzle on another device.
         // An agent's run never gets it: `puz swords manage` shows it to the user.
-        if sent.created && !env.agent {
+        // Signed in, the puzzle is already on the account: no claim link, but the builder's page for it.
+        let attached = sent.reply.get("email").and_then(Json::as_str).is_some();
+        if sent.created && attached {
+            data["open"] = serde_json::json!(commands::builder_link(&sent.link.site, &sent.link.id));
+        } else if sent.created && !env.agent {
             data["claim"] = sent.reply.get("manage").map_or(serde_json::Value::Null, Json::to_value);
         }
         swords_client::say(&serde_json::to_string_pretty(&data)?);
@@ -131,6 +135,7 @@ fn publish_inner(o: Publish) -> Result<()> {
     let pen = Pen::stdout();
     let mut reply = sent.reply.clone();
     reply.set("title", sent.title.as_str().into());
+    reply.set("open", commands::builder_link(&sent.link.site, &sent.link.id).into());
     if sent.link.pin {
         reply.set("locked", true.into());
     }
